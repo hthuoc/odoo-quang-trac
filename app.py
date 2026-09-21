@@ -88,7 +88,7 @@ components.html(
 )
 
 # -------------------------------------------------------------------
-# CẤU HÌNH CHUNG KẾT NỐI ODOO & CACHE THÔNG TIN HỆ THỐNG (OPTIMIZED)
+# CẤU HÌNH CHUNG KẾT NỐI ODOO & CACHE THÔNG TIN HỆ THỐNG
 # -------------------------------------------------------------------
 ODOO_URL = "https://erp.quatest3.com.vn"
 ODOO_DB = "QUATEST3_18"
@@ -118,7 +118,7 @@ STATE_MAP = {
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_odoo_user_and_partner_ids():
-    """Cache ID người dùng để tránh gọi Odoo tìm kiếm liên tục (Save network calls)"""
+    """Cache ID người dùng để tránh gọi Odoo tìm kiếm liên tục"""
     try:
         ctx = ssl._create_unverified_context()
         common = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/common', allow_none=True, context=ctx)
@@ -194,7 +194,7 @@ def clean_odoo_field_value(x):
 
 
 # ===================================================================
-# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC (TỐI ƯU VỚI CACHE)
+# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC (GIỮ NGUYÊN TRA CỨU TOÀN BỘ)
 # ===================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_lookup_data_from_odoo(query_str):
@@ -390,7 +390,7 @@ def run_lookup_app():
 
 
 # ===================================================================
-# 3. CHỨC NĂNG 2: QUẢN LÝ THỜI HẠN MÃ QUANG TRẮC (TỐI ƯU TỐC ĐỘ)
+# 3. CHỨC NĂNG 2: QUẢN LÝ (CHỈ LẤY NGÀY PHÂN CÔNG TỪ 01/09/2026)
 # ===================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_management_data_from_odoo():
@@ -439,11 +439,14 @@ def fetch_management_data_from_odoo():
             res_field = 'result_testing' if 'result_testing' in valid_odoo_fields else 'result'
             code_field = 'manual_code' if 'manual_code' in valid_odoo_fields else 'code'
 
+            # --- ĐIỀU KIỆN LỌC ODOO: CHỈ LẤY NGÀY PHÂN CÔNG TỪ 01/09/2026 TRỞ ĐI ---
             domain = [
                 (res_field, '=', False),
                 ('assignee_ids', 'in', list(valid_ids)),
                 (code_field, '!=', False)
             ]
+            if 'start_date' in valid_odoo_fields:
+                domain.append(('start_date', '>=', '2026-09-01'))
 
             fields_to_read = list(actual_fields_map.keys())
 
@@ -552,6 +555,13 @@ def fetch_management_data_from_odoo():
 
             df['deadline_dt'] = pd.to_datetime(df[deadline_col], errors='coerce')
             df['start_date_dt'] = pd.to_datetime(df[start_date_col], errors='coerce')
+
+            # LỌC LẠI BẰNG PANDAS DÀNH CHO PHẦN QUẢN LÝ
+            if 'start_date_dt' in df.columns:
+                df = df[df['start_date_dt'] >= pd.to_datetime('2026-09-01')].copy()
+
+            if df.empty:
+                return pd.DataFrame()
 
             for col in df.columns:
                 if col not in ['deadline_dt', 'start_date_dt', 'Trạng thái hạn', 'assignee_ids']:
@@ -860,7 +870,6 @@ def render_management_html_table(df, reschedule_info):
 def run_management_app():
     st.subheader("📊 Quản lý Thời hạn Mã Quang Trắc")
 
-    # Đọc tệp JSON hẹn lại 1 lần duy nhất cho toàn bộ giao diện Quản lý
     res_data = load_reschedule_data()
     now_dt = datetime.now()
 
@@ -1172,7 +1181,7 @@ def run_management_app():
         else:
             st.warning("Không tìm thấy dữ liệu phù hợp với điều kiện lọc.")
     else:
-        st.info("Không tìm thấy mã quang trắc nào được phân công hoặc hệ thống đang bận.")
+        st.info("Không tìm thấy mã quang trắc nào được phân công từ ngày 01/09/2026.")
 
 
 # ===================================================================
@@ -1197,14 +1206,14 @@ if st.session_state['app_mode'] is None:
 
     with col_btn1:
         st.info("### 🔍 Tra cứu")
-        st.write("Tìm kiếm công việc chi tiết theo từng **Mã quang trắc** cụ thể.")
+        st.write("Tìm kiếm công việc chi tiết theo từng **Mã quang trắc** cụ thể (Tra cứu toàn bộ thời gian).")
         if st.button("Truy cập Tra cứu", use_container_width=True, type="primary"):
             st.session_state['app_mode'] = 'tracuu'
             st.rerun()
 
     with col_btn2:
         st.success("### 📊 Quản lý")
-        st.write("Tổng hợp danh sách công việc theo **Thời hạn** và bộ lọc đa năng.")
+        st.write("Tổng hợp danh sách công việc theo **Thời hạn** từ 01/09/2026 trở đi.")
         if st.button("Truy cập Quản lý", use_container_width=True, type="primary"):
             st.session_state['app_mode'] = 'quanly'
             st.rerun()
