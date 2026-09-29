@@ -208,7 +208,7 @@ def extract_sample_value(row, active_sample_fields):
 
 
 # ===================================================================
-# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC (ĐÃ ĐIỀU CHỈNH GỘP Ô MẪU)
+# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC (GIỮ NGUYÊN BẢNG TRA CỨU)
 # ===================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_lookup_data_from_odoo(query_str):
@@ -352,9 +352,7 @@ def render_lookup_html_table(df):
         html_lines.append(f'<th>{col}</th>')
     html_lines.append('</tr></thead><tbody>')
 
-    # Ngày phân công và Thời hạn gộp theo mã gốc (_base_code)
     main_merge_cols = [c for c in ['Ngày phân công', 'Thời hạn'] if c in existing_cols]
-    # Mẫu và Mã quang trắc gộp theo từng Mã quang trắc cụ thể (.01, .02, ...)
     code_merge_cols = [c for c in ['Mẫu', 'Mã quang trắc'] if c in existing_cols]
 
     n = len(df)
@@ -415,7 +413,7 @@ def run_lookup_app():
 
 
 # ===================================================================
-# 3. CHỨC NĂNG 2: QUẢN LÝ (GIỮ NGUYÊN HOÀN TOÀN TỪ 01/09/2026)
+# 3. CHỨC NĂNG 2: QUẢN LÝ (ĐÃ BỎ CỘT MẪU)
 # ===================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_management_data_from_odoo():
@@ -441,10 +439,6 @@ def fetch_management_data_from_odoo():
                     actual_fields_map['name'] = v
                 elif k == 'testing_method_id' and 'test_method_id' in valid_odoo_fields:
                     actual_fields_map['test_method_id'] = v
-
-            active_sample_fields = [sf for sf in POSSIBLE_SAMPLE_FIELDS if sf in valid_odoo_fields]
-            for sf in active_sample_fields:
-                actual_fields_map[sf] = sf
 
             bold_fields = ['is_bold', 'is_header', 'display_type', 'is_title']
             active_bold_fields = [f for f in bold_fields if f in valid_odoo_fields]
@@ -590,10 +584,8 @@ def fetch_management_data_from_odoo():
             if df.empty:
                 return pd.DataFrame()
 
-            df['Mẫu'] = df.apply(lambda r: extract_sample_value(r, active_sample_fields), axis=1)
-
             for col in df.columns:
-                if col not in ['deadline_dt', 'start_date_dt', 'Trạng thái hạn', 'assignee_ids', 'Mẫu']:
+                if col not in ['deadline_dt', 'start_date_dt', 'Trạng thái hạn', 'assignee_ids']:
                     df[col] = df[col].apply(clean_odoo_field_value)
 
             df = df.rename(columns=actual_fields_map)
@@ -670,8 +662,9 @@ def render_management_html_table(df, reschedule_info):
     if df.empty:
         return ""
 
+    # Đã bỏ 'Mẫu' khỏi danh sách cột hiển thị
     cols_order = [
-        'Trạng thái hạn', 'Ngày phân công', 'Thời hạn', 'Mẫu',
+        'Trạng thái hạn', 'Ngày phân công', 'Thời hạn',
         'Mã quang trắc', 'Công việc', 'Testing method', 'ĐVT', 'Ghi chú'
     ]
     existing_cols = [c for c in cols_order if c in df.columns]
@@ -840,9 +833,9 @@ def render_management_html_table(df, reschedule_info):
 
                             html_lines.append(f'<td rowspan="{root_rowspan}" class="{bg_class}{root_border}"{align}>{cell_content}</td>')
 
-                    elif col in ['Ngày phân công', 'Thời hạn', 'Mẫu']:
+                    elif col in ['Ngày phân công', 'Thời hạn']:
                         if r == i:
-                            align = ' style="text-align: center;"' if col in ['Ngày phân công', 'Thời hạn'] else ''
+                            align = ' style="text-align: center;"'
                             root_border = ' top-border-root' if i > 0 else ''
                             html_lines.append(f'<td rowspan="{root_rowspan}" class="{bg_class}{root_border}"{align}>{val}</td>')
 
