@@ -93,7 +93,7 @@ components.html(
 ODOO_URL = "https://erp.quatest3.com.vn"
 ODOO_DB = "QUATEST3_18"
 ODOO_USER = "thuoc.hh@quatest3.com.vn"
-ODOO_PASSWORD = "ce7bedfb5be533accb6a5126d2c1c4a85a298a84"
+ODOO_PASSWORD = "294bca66617ec3498ac0530aea4d9cb72056a32d"
 
 FIELDS_MAP = {
     'start_date': 'Ngày phân công',
