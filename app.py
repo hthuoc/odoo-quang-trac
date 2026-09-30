@@ -337,7 +337,18 @@ def render_lookup_html_table(df):
         df['_base_code'] = df['Mã quang trắc'].apply(lambda x: str(x).split('.')[0] if x else '')
     else:
         df['_base_code'] = ''
-
+    col_widths = {
+        'Ngày phân công': '100px',
+        'Thời hạn': '100px',
+        'Mẫu': '180px',            # Đã giảm độ rộng cột Mẫu lại (chữ dài sẽ tự xuống dòng)
+        'Mã quang trắc': '160px',
+        'Công việc': '230px',      # Tăng độ rộng cột Công việc
+        'Testing method': '250px', # Tăng độ rộng cột Testing method
+        'ĐVT': '70px',
+        'Ghi chú': '110px',
+        'Kết quả': '100px',
+        'Trạng thái': '110px'
+    }
     html_lines = []
     html_lines.append('<style>')
     html_lines.append('  .custom-table-lookup { width: 100%; border-collapse: collapse; margin-top: 15px; font-family: sans-serif; font-size: 14px; }')
