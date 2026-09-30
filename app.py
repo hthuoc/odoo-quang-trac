@@ -107,11 +107,6 @@ FIELDS_MAP = {
     'assignee_ids': 'Người được phân công'
 }
 
-POSSIBLE_SAMPLE_FIELDS = [
-    'sample_name', 'sample_id', 'sample', 'product_id', 
-    'sample_description', 'lot_id', 'production_lot_id'
-]
-
 STATE_MAP = {
     'draft': 'Dự thảo',
     'assigned': 'Đã phân công',
@@ -197,18 +192,9 @@ def clean_odoo_field_value(x):
             return ", ".join(names)
     return str(x)
 
-def extract_sample_value(row, active_sample_fields):
-    """Trích xuất giá trị Mẫu từ các trường Odoo tương ứng"""
-    for sf in active_sample_fields:
-        val = row.get(sf)
-        cleaned = clean_odoo_field_value(val).strip()
-        if cleaned and cleaned.lower() != 'false':
-            return cleaned
-    return ''
-
 
 # ===================================================================
-# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC (GIỮ NGUYÊN BẢNG TRA CỨU)
+# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC (GIỮ NGUYÊN TRA CỨU TOÀN BỘ)
 # ===================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_lookup_data_from_odoo(query_str):
@@ -234,11 +220,6 @@ def fetch_lookup_data_from_odoo(query_str):
                     actual_fields_map['name'] = v
                 elif k == 'testing_method_id' and 'test_method_id' in valid_odoo_fields:
                     actual_fields_map['test_method_id'] = v
-
-            LOOKUP_SAMPLE_FIELDS = ['parent_id', 'sample_name', 'sample_id', 'sample', 'product_id', 'sample_description']
-            active_sample_fields = [sf for sf in LOOKUP_SAMPLE_FIELDS if sf in valid_odoo_fields]
-            for sf in active_sample_fields:
-                actual_fields_map[sf] = sf
 
             if 'state' in valid_odoo_fields:
                 actual_fields_map['state'] = 'Trạng thái'
@@ -296,11 +277,8 @@ def fetch_lookup_data_from_odoo(query_str):
             if df.empty:
                 return pd.DataFrame()
 
-            df['Mẫu'] = df.apply(lambda r: extract_sample_value(r, active_sample_fields), axis=1)
-
             for col in df.columns:
-                if col != 'Mẫu':
-                    df[col] = df[col].apply(clean_odoo_field_value)
+                df[col] = df[col].apply(clean_odoo_field_value)
 
             state_col = [k for k, v in actual_fields_map.items() if v == 'Trạng thái']
             if state_col and state_col[0] in df.columns:
@@ -329,7 +307,7 @@ def render_lookup_html_table(df):
     if df.empty:
         return ""
 
-    cols_order = ['Ngày phân công', 'Thời hạn', 'Mẫu', 'Mã quang trắc', 'Công việc', 'Testing method', 'ĐVT', 'Ghi chú', 'Kết quả', 'Trạng thái']
+    cols_order = ['Ngày phân công', 'Thời hạn', 'Mã quang trắc', 'Công việc', 'Testing method', 'ĐVT', 'Ghi chú', 'Kết quả', 'Trạng thái']
     existing_cols = [c for c in cols_order if c in df.columns]
     df = df[existing_cols].fillna('')
 
@@ -353,7 +331,6 @@ def render_lookup_html_table(df):
     html_lines.append('</tr></thead><tbody>')
 
     main_merge_cols = [c for c in ['Ngày phân công', 'Thời hạn'] if c in existing_cols]
-    code_merge_cols = [c for c in ['Mẫu', 'Mã quang trắc'] if c in existing_cols]
 
     n = len(df)
     i = 0
@@ -373,7 +350,6 @@ def render_lookup_html_table(df):
             for r in range(sub_i, sub_j):
                 html_lines.append('<tr>')
                 is_last_row_of_code = (r == sub_j - 1)
-                border_class = ' class="code-group-border"' if is_last_row_of_code else ''
 
                 for col in existing_cols:
                     val = str(df.iloc[r][col])
@@ -381,10 +357,11 @@ def render_lookup_html_table(df):
                     if col in main_merge_cols:
                         if r == i:
                             html_lines.append(f'<td rowspan="{base_rowspan}">{val}</td>')
-                    elif col in code_merge_cols:
+                    elif col == 'Mã quang trắc':
                         if r == sub_i:
-                            html_lines.append(f'<td rowspan="{code_rowspan}"{border_class}>{val}</td>')
+                            html_lines.append(f'<td rowspan="{code_rowspan}" class="code-group-border">{val}</td>')
                     else:
+                        border_class = ' class="code-group-border"' if is_last_row_of_code else ''
                         html_lines.append(f'<td{border_class}>{val}</td>')
                 html_lines.append('</tr>')
 
@@ -413,7 +390,7 @@ def run_lookup_app():
 
 
 # ===================================================================
-# 3. CHỨC NĂNG 2: QUẢN LÝ (ĐÃ BỎ CỘT MẪU)
+# 3. CHỨC NĂNG 2: QUẢN LÝ (CHỈ LẤY NGÀY PHÂN CÔNG TỪ 01/09/2026)
 # ===================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_management_data_from_odoo():
@@ -462,6 +439,7 @@ def fetch_management_data_from_odoo():
             res_field = 'result_testing' if 'result_testing' in valid_odoo_fields else 'result'
             code_field = 'manual_code' if 'manual_code' in valid_odoo_fields else 'code'
 
+            # --- ĐIỀU KIỆN LỌC ODOO: CHỈ LẤY NGÀY PHÂN CÔNG TỪ 01/09/2026 TRỞ ĐI ---
             domain = [
                 (res_field, '=', False),
                 ('assignee_ids', 'in', list(valid_ids)),
@@ -578,6 +556,7 @@ def fetch_management_data_from_odoo():
             df['deadline_dt'] = pd.to_datetime(df[deadline_col], errors='coerce')
             df['start_date_dt'] = pd.to_datetime(df[start_date_col], errors='coerce')
 
+            # LỌC LẠI BẰNG PANDAS DÀNH CHO PHẦN QUẢN LÝ
             if 'start_date_dt' in df.columns:
                 df = df[df['start_date_dt'] >= pd.to_datetime('2026-09-01')].copy()
 
@@ -593,6 +572,7 @@ def fetch_management_data_from_odoo():
             if 'Mã quang trắc' in df.columns:
                 df = df[df['Mã quang trắc'].astype(str).str.strip().ne('')].copy()
 
+            # LỌC DUMAS VÀ KJELDAHL
             if 'Mã quang trắc' in df.columns and 'Testing method' in df.columns:
                 method_series = df['Testing method'].astype(str).str.lower()
                 kd_df = df[method_series.str.contains('kjeldahl|dumas', regex=True, na=False)]
@@ -662,9 +642,8 @@ def render_management_html_table(df, reschedule_info):
     if df.empty:
         return ""
 
-    # Đã bỏ 'Mẫu' khỏi danh sách cột hiển thị
     cols_order = [
-        'Trạng thái hạn', 'Ngày phân công', 'Thời hạn',
+        'Trạng thái hạn', 'Ngày phân công', 'Thời hạn', 
         'Mã quang trắc', 'Công việc', 'Testing method', 'ĐVT', 'Ghi chú'
     ]
     existing_cols = [c for c in cols_order if c in df.columns]
@@ -894,6 +873,9 @@ def run_management_app():
     res_data = load_reschedule_data()
     now_dt = datetime.now()
 
+    # -------------------------------------------------------------------
+    # KHUNG XÁC NHẬN CẢNH BÁO ĐẾN HẠN
+    # -------------------------------------------------------------------
     due_codes_list = []
     due_jobs_list = []
 
@@ -965,6 +947,9 @@ def run_management_app():
                 ~df_filtered['Công việc'].astype(str).str.strip().str.lower().str.startswith('năng lượng')
             ].copy()
 
+        # -------------------------------------------------------------------
+        # KHUNG THAO TÁC HẸN LẠI THỜI HẠN
+        # -------------------------------------------------------------------
         with st.expander("📅 **Chức năng Hẹn Lại Thời Hạn (Lưu nội bộ)**", expanded=False):
             res_mode = st.radio("Chọn phạm vi hẹn lại:", ["Hẹn mã quang trắc", "Hẹn chỉ tiêu"], horizontal=True)
             
@@ -1046,6 +1031,9 @@ def run_management_app():
                     else:
                         st.warning("Vui lòng chọn ít nhất một Công việc.")
 
+        # -------------------------------------------------------------------
+        # ÁP DỤNG THỜI HẠN NỘI BỘ VÀ TÍNH TOÁN BÁO ĐỘNG
+        # -------------------------------------------------------------------
         df_filtered['_code_reschedule'] = None
         df_filtered['_job_reschedule'] = None
         df_filtered['_is_reschedule_due'] = False
@@ -1116,6 +1104,9 @@ def run_management_app():
 
         df_filtered['Trạng thái hạn'] = df_filtered.apply(update_status_circle, axis=1)
 
+        # -------------------------------------------------------------------
+        # KHUNG LỌC GIAO DIỆN
+        # -------------------------------------------------------------------
         with st.container():
             col1, col2, col3, col4, col5, col6 = st.columns(6)
 
