@@ -340,13 +340,13 @@ def render_lookup_html_table(df):
     col_widths = {
         'Ngày phân công': '100px',
         'Thời hạn': '100px',
-        'Mẫu': '180px',            # Đã giảm độ rộng cột Mẫu lại (chữ dài sẽ tự xuống dòng)
+        'Mẫu': '130px',            
         'Mã quang trắc': '160px',
-        'Công việc': '230px',      # Tăng độ rộng cột Công việc
-        'Testing method': '250px', # Tăng độ rộng cột Testing method
+        'Công việc': '230px',      
+        'Testing method': '250px',
         'ĐVT': '70px',
-        'Ghi chú': '110px',
-        'Kết quả': '100px',
+        'Ghi chú': '130px',
+        'Kết quả': '120px',
         'Trạng thái': '110px'
     }
     html_lines = []
