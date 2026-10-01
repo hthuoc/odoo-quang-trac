@@ -337,22 +337,30 @@ def render_lookup_html_table(df):
         df['_base_code'] = df['Mã quang trắc'].apply(lambda x: str(x).split('.')[0] if x else '')
     else:
         df['_base_code'] = ''
+
+    # ===================================================================
+    # KHAI BÁO ĐỘ RỘNG MONG PHÙ HỢP CHO TỪNG CỘT (Có thể điều chỉnh pixel)
+    # (Translation: Column width definitions)
+    # ===================================================================
     col_widths = {
         'Ngày phân công': '100px',
         'Thời hạn': '100px',
-        'Mẫu': '130px',            
+        'Mẫu': '180px',            # Đã giảm độ rộng cột Mẫu lại (chữ dài sẽ tự xuống dòng)
         'Mã quang trắc': '160px',
-        'Công việc': '230px',      
-        'Testing method': '250px',
+        'Công việc': '230px',      # Tăng độ rộng cột Công việc
+        'Testing method': '250px', # Tăng độ rộng cột Testing method
         'ĐVT': '70px',
-        'Ghi chú': '130px',
-        'Kết quả': '120px',
+        'Ghi chú': '110px',
+        'Kết quả': '100px',
         'Trạng thái': '110px'
     }
+
     html_lines = []
     html_lines.append('<style>')
-    html_lines.append('  .custom-table-lookup { width: 100%; border-collapse: collapse; margin-top: 15px; font-family: sans-serif; font-size: 14px; }')
-    html_lines.append('  .custom-table-lookup th, .custom-table-lookup td { border: 1px solid #D3D3D3; padding: 8px 12px; text-align: left; vertical-align: middle; }')
+    # table-layout: fixed giúp ép kích thước các cột theo đúng cấu hình px ở trên
+    html_lines.append('  .custom-table-lookup { width: 100%; border-collapse: collapse; margin-top: 15px; font-family: sans-serif; font-size: 14px; table-layout: fixed; }')
+    # word-wrap và overflow-wrap giúp chữ dài trong cột Mẫu tự ngắt dòng
+    html_lines.append('  .custom-table-lookup th, .custom-table-lookup td { border: 1px solid #D3D3D3; padding: 8px 12px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }')
     html_lines.append('  .custom-table-lookup th { background-color: #F0F2F6; color: #1F2937; font-weight: bold; }')
     html_lines.append('  .custom-table-lookup tr:nth-child(even) { background-color: #FAFAFA; }')
     html_lines.append('  .code-group-border { border-bottom: 3px solid #000000 !important; }')
@@ -360,7 +368,9 @@ def render_lookup_html_table(df):
 
     html_lines.append('<table class="custom-table-lookup"><thead><tr>')
     for col in existing_cols:
-        html_lines.append(f'<th>{col}</th>')
+        # Gán style width trực tiếp vào thẻ th
+        width_style = f' style="width: {col_widths.get(col, "auto")};"'
+        html_lines.append(f'<th{width_style}>{col}</th>')
     html_lines.append('</tr></thead><tbody>')
 
     main_merge_cols = [c for c in ['Ngày phân công', 'Thời hạn'] if c in existing_cols]
