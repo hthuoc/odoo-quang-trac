@@ -349,7 +349,7 @@ def render_lookup_html_table(df):
         'Mã quang trắc': '160px',
         'Công việc': '230px',      # Tăng độ rộng cột Công việc
         'Testing method': '200px', # Tăng độ rộng cột Testing method
-        'ĐVT': '100px',
+        'ĐVT': '85px',
         'Ghi chú': '110px',
         'Kết quả': '100px',
         'Trạng thái': '110px'
