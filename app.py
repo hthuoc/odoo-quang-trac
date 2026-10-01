@@ -348,7 +348,7 @@ def render_lookup_html_table(df):
         'Mẫu': '180px',            # Đã giảm độ rộng cột Mẫu lại (chữ dài sẽ tự xuống dòng)
         'Mã quang trắc': '160px',
         'Công việc': '230px',      # Tăng độ rộng cột Công việc
-        'Testing method': '250px', # Tăng độ rộng cột Testing method
+        'Testing method': '200px', # Tăng độ rộng cột Testing method
         'ĐVT': '70px',
         'Ghi chú': '110px',
         'Kết quả': '100px',
