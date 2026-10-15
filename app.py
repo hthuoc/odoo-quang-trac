@@ -112,7 +112,6 @@ ODOO_URL = "https://erp.quatest3.com.vn"
 ODOO_DB = "QUATEST3_18"
 ODOO_USER = "thuoc.hh@quatest3.com.vn"
 ODOO_PASSWORD = "294bca66617ec3498ac0530aea4d9cb72056a32d"
-
 FIELDS_MAP = {
     'start_date': 'Ngày phân công',
     'deadline': 'Thời hạn',
