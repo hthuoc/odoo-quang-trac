@@ -68,7 +68,7 @@ def ack_reschedule(res_type, key):
         data["jobs"][key]["ack"] = True
         save_reschedule_data(data)
 
-# QUẢN LÝ DANH SÁCH CÔNG VIỆC BỎ QUA (CHỈ DÙNG CHO MỤC QUẢN LÝ)
+# QUẢN LÝ DANH SÁCH CÔNG VIỆC BỎ QUA
 def load_ignored_jobs():
     if os.path.exists(IGNORED_JOBS_FILE):
         try:
@@ -112,6 +112,7 @@ ODOO_URL = "https://erp.quatest3.com.vn"
 ODOO_DB = "QUATEST3_18"
 ODOO_USER = "thuoc.hh@quatest3.com.vn"
 ODOO_PASSWORD = "294bca66617ec3498ac0530aea4d9cb72056a32d"
+
 FIELDS_MAP = {
     'start_date': 'Ngày phân công',
     'deadline': 'Thời hạn',
@@ -124,10 +125,7 @@ FIELDS_MAP = {
     'assignee_ids': 'Người được phân công'
 }
 
-POSSIBLE_SAMPLE_FIELDS = [
-    'sample_name', 'sample_id', 'sample', 'product_id', 
-    'sample_description', 'lot_id', 'production_lot_id'
-]
+LOOKUP_SAMPLE_FIELDS = ['parent_id', 'sample_name', 'sample_id', 'sample', 'product_id', 'sample_description']
 
 STATE_MAP = {
     'draft': 'Dự thảo',
@@ -140,7 +138,6 @@ STATE_MAP = {
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_odoo_user_and_partner_ids():
-    """Cache ID người dùng để tránh gọi Odoo tìm kiếm liên tục"""
     try:
         ctx = ssl._create_unverified_context()
         common = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/common', allow_none=True, context=ctx)
@@ -155,7 +152,6 @@ def get_odoo_user_and_partner_ids():
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def get_assign_work_line_fields():
-    """Cache cấu hình danh sách trường thông tin Odoo"""
     try:
         ctx = ssl._create_unverified_context()
         common = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/common', allow_none=True, context=ctx)
@@ -198,7 +194,6 @@ def format_rescheduled_display(dt_str):
     return str(dt_str)
 
 def clean_odoo_field_value(x):
-    """Bóc tách lấy Tên hiển thị từ dữ liệu Odoo"""
     if not x:
         return ''
     if isinstance(x, (list, tuple)) and len(x) == 2 and isinstance(x[0], int) and isinstance(x[1], str):
@@ -215,7 +210,6 @@ def clean_odoo_field_value(x):
     return str(x)
 
 def extract_sample_value(row, active_sample_fields):
-    """Trích xuất giá trị Mẫu từ các trường Odoo tương ứng"""
     for sf in active_sample_fields:
         val = row.get(sf)
         cleaned = clean_odoo_field_value(val).strip()
@@ -225,7 +219,7 @@ def extract_sample_value(row, active_sample_fields):
 
 
 # ===================================================================
-# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC (GIỮ NGUYÊN 100% TỪ CODE CỦA BẠN)
+# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC
 # ===================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_lookup_data_from_odoo(query_str):
@@ -252,7 +246,6 @@ def fetch_lookup_data_from_odoo(query_str):
                 elif k == 'testing_method_id' and 'test_method_id' in valid_odoo_fields:
                     actual_fields_map['test_method_id'] = v
 
-            LOOKUP_SAMPLE_FIELDS = ['parent_id', 'sample_name', 'sample_id', 'sample', 'product_id', 'sample_description']
             active_sample_fields = [sf for sf in LOOKUP_SAMPLE_FIELDS if sf in valid_odoo_fields]
             for sf in active_sample_fields:
                 actual_fields_map[sf] = sf
@@ -444,7 +437,7 @@ def run_lookup_app():
 
 
 # ===================================================================
-# 3. CHỨC NĂNG 2: QUẢN LÝ (CHỈ SỬA TẠI ĐÂY: THÊM CỘT MẪU VÀ NÚT BỎ QUA)
+# 3. CHỨC NĂNG 2: QUẢN LÝ (LẤY MẪU CHUẨN + GIỮ NGUYÊN BẢNG HTML)
 # ===================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_management_data_from_odoo():
@@ -471,7 +464,8 @@ def fetch_management_data_from_odoo():
                 elif k == 'testing_method_id' and 'test_method_id' in valid_odoo_fields:
                     actual_fields_map['test_method_id'] = v
 
-            active_sample_fields = [sf for sf in POSSIBLE_SAMPLE_FIELDS if sf in valid_odoo_fields]
+            # SỬA LỖI LẤY MẪU: Dùng danh sách trường giống hệt Tra cứu
+            active_sample_fields = [sf for sf in LOOKUP_SAMPLE_FIELDS if sf in valid_odoo_fields]
             for sf in active_sample_fields:
                 actual_fields_map[sf] = sf
 
@@ -672,7 +666,7 @@ def fetch_management_data_from_odoo():
                                     
                                     if 'kjeldahl' in r_method and r_code in codes_with_completed_dumas:
                                         return False
-                                    if 'dumas' in r_method and r_code in codes_with_completed_kjeldahl:
+                                    if 'dumas' in r_method and r_code in codes_with_completed_dumas:
                                         return False
                                     return True
                                 
@@ -695,21 +689,21 @@ def fetch_management_data_from_odoo():
                 st.error(f"Lỗi kết nối hoặc truy vấn Odoo: {e}")
                 return pd.DataFrame()
 
-def render_management_app_custom(df, reschedule_info):
+def render_management_html_table(df, reschedule_info):
     if df.empty:
-        st.info("Không có dữ liệu công việc.")
-        return
+        return ""
 
     cols_order = [
         'Trạng thái hạn', 'Ngày phân công', 'Thời hạn',
         'Mẫu', 'Mã quang trắc', 'Công việc', 'Testing method', 'ĐVT', 'Ghi chú'
     ]
     existing_cols = [c for c in cols_order if c in df.columns]
-    
-    if 'Mã quang trắc' in df.columns:
-        df['_group_code'] = df['Mã quang trắc'].apply(lambda x: str(x).split('.')[0].strip() if x else '')
+    df_display = df[existing_cols].fillna('')
+
+    if 'Mã quang trắc' in df_display.columns:
+        df_display['_group_code'] = df_display['Mã quang trắc'].apply(lambda x: str(x).split('.')[0].strip() if x else '')
     else:
-        df['_group_code'] = df.index
+        df_display['_group_code'] = df_display.index
 
     col_widths = {
         'Trạng thái hạn': '60px',
@@ -724,48 +718,58 @@ def render_management_app_custom(df, reschedule_info):
         'Thao tác': '90px'
     }
 
-    st.markdown("""
-    <style>
-      .custom-table-mgmt { width: 100%; border-collapse: collapse !important; margin-top: 10px; font-family: sans-serif; font-size: 14px; table-layout: fixed; }
-      .custom-table-mgmt th { background-color: #E2E8F0; color: #1A202C; font-weight: bold; text-align: center; border: 1px solid #CBD5E0; padding: 10px 8px; }
-      .custom-table-mgmt td { border: 1px solid #CBD5E0; padding: 8px 8px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }
-      .top-border-root { border-top: 2.5px solid #2D3748 !important; }
-      .top-border-sub { border-top: 1.5px solid #718096 !important; }
-      .bg-group-0 { background-color: #FFFFFF !important; }
-      .bg-group-1 { background-color: #EDF2F7 !important; }
-      
-      @keyframes alert-shake-pulse {
-          0% { transform: scale(1) rotate(0deg); }
-          20% { transform: scale(1.35) rotate(-14deg); }
-          40% { transform: scale(1.35) rotate(14deg); }
-          60% { transform: scale(1.35) rotate(-8deg); }
-          80% { transform: scale(1.35) rotate(8deg); }
-          100% { transform: scale(1) rotate(0deg); }
-      }
-      .alert-triangle-animated {
-          display: inline-block; font-size: 18px; animation: alert-shake-pulse 0.75s infinite; line-height: 1; margin-top: 2px; margin-left: 4px;
-      }
-      .speech-bubble-wrapper { position: relative; display: inline-block; cursor: pointer; }
-      .speech-bubble-pop {
-          visibility: hidden; opacity: 0; width: max-content; max-width: 240px; background-color: #FFFFFF; color: #10B981; border: 2px solid #10B981;
-          text-align: center; border-radius: 12px; padding: 6px 12px; position: absolute; z-index: 9999; bottom: 125%; left: 50%;
-          transform: translateX(-20%); transition: opacity 0.2s ease-in-out; font-size: 13px; font-weight: bold; box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15); pointer-events: none;
-      }
-      .speech-bubble-pop::after { content: ""; position: absolute; top: 100%; left: 18px; border-width: 7px; border-style: solid; border-color: #10B981 transparent transparent transparent; }
-      .speech-bubble-pop::before { content: ""; position: absolute; top: 100%; left: 19px; border-width: 5px; border-style: solid; border-color: #FFFFFF transparent transparent transparent; z-index: 1; }
-      .speech-bubble-wrapper:hover .speech-bubble-pop, .speech-bubble-wrapper:focus .speech-bubble-pop { visibility: visible; opacity: 1; }
-    </style>
-    """, unsafe_allow_html=True)
+    html_lines = []
+    html_lines.append('<style>')
+    html_lines.append('  .custom-table-mgmt { width: 100%; border-collapse: collapse !important; margin-top: 15px; font-family: sans-serif; font-size: 14px; table-layout: fixed; }')
+    html_lines.append('  .custom-table-mgmt th { background-color: #E2E8F0; color: #1A202C; font-weight: bold; text-align: center; border: 1px solid #CBD5E0; padding: 10px 8px; }')
+    html_lines.append('  .custom-table-mgmt td { border: 1px solid #CBD5E0; padding: 8px 8px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }')
+    html_lines.append('  .top-border-root { border-top: 2.5px solid #2D3748 !important; }')
+    html_lines.append('  .top-border-sub { border-top: 1.5px solid #718096 !important; }')
+    html_lines.append('  .bg-group-0 { background-color: #FFFFFF !important; }')
+    html_lines.append('  .bg-group-1 { background-color: #EDF2F7 !important; }')
+    html_lines.append('  .btn-ignore { background-color: #FFF; border: 1px solid #E2E8F0; border-radius: 6px; padding: 4px 8px; cursor: pointer; color: #E53E3E; font-weight: bold; font-size: 13px; }')
+    html_lines.append('  .btn-ignore:hover { background-color: #FED7D7; }')
+    
+    html_lines.append('''
+    @keyframes alert-shake-pulse {
+        0% { transform: scale(1) rotate(0deg); }
+        20% { transform: scale(1.35) rotate(-14deg); }
+        40% { transform: scale(1.35) rotate(14deg); }
+        60% { transform: scale(1.35) rotate(-8deg); }
+        80% { transform: scale(1.35) rotate(8deg); }
+        100% { transform: scale(1) rotate(0deg); }
+    }
+    .alert-triangle-animated { display: inline-block; font-size: 18px; animation: alert-shake-pulse 0.75s infinite; line-height: 1; margin-top: 2px; margin-left: 4px; }
+    .speech-bubble-wrapper { position: relative; display: inline-block; cursor: pointer; }
+    .speech-bubble-pop {
+        visibility: hidden; opacity: 0; width: max-content; max-width: 240px; background-color: #FFFFFF; color: #10B981; border: 2px solid #10B981;
+        text-align: center; border-radius: 12px; padding: 6px 12px; position: absolute; z-index: 9999; bottom: 125%; left: 50%;
+        transform: translateX(-20%); transition: opacity 0.2s ease-in-out; font-size: 13px; font-weight: bold; box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.15); pointer-events: none;
+    }
+    .speech-bubble-pop::after { content: ""; position: absolute; top: 100%; left: 18px; border-width: 7px; border-style: solid; border-color: #10B981 transparent transparent transparent; }
+    .speech-bubble-pop::before { content: ""; position: absolute; top: 100%; left: 19px; border-width: 5px; border-style: solid; border-color: #FFFFFF transparent transparent transparent; z-index: 1; }
+    .speech-bubble-wrapper:hover .speech-bubble-pop, .speech-bubble-wrapper:focus .speech-bubble-pop { visibility: visible; opacity: 1; }
+    ''')
+    html_lines.append('</style>')
 
-    n = len(df)
+    html_lines.append('<table class="custom-table-mgmt"><thead><tr>')
+    for col in existing_cols:
+        header_title = "" if col == 'Trạng thái hạn' else col
+        width_style = f' style="width: {col_widths.get(col, "auto")};"'
+        html_lines.append(f'<th{width_style}>{header_title}</th>')
+    html_lines.append(f'<th style="width: {col_widths["Thao tác"]};">Thao tác</th>')
+    html_lines.append('</tr></thead><tbody>')
+
+    n = len(df_display)
     i = 0
     group_idx = 0
 
     while i < n:
         j = i + 1
-        root_code_i = df.iloc[i]['_group_code']
-        while j < n and df.iloc[j]['_group_code'] == root_code_i:
+        root_code_i = df_display.iloc[i]['_group_code']
+        while j < n and df_display.iloc[j]['_group_code'] == root_code_i:
             j += 1
+        root_rowspan = j - i
 
         bg_class = f"bg-group-{group_idx % 2}"
 
@@ -789,52 +793,50 @@ def render_management_app_custom(df, reschedule_info):
         all_codes_rescheduled = (total_sub_codes > 0 and res_sub_codes_count == total_sub_codes)
         partial_codes_rescheduled = (0 < res_sub_codes_count < total_sub_codes)
 
-        html_lines = []
-        html_lines.append('<table class="custom-table-mgmt"><thead><tr>')
-        for col in existing_cols:
-            header_title = "" if col == 'Trạng thái hạn' else col
-            width_style = f' style="width: {col_widths.get(col, "auto")};"'
-            html_lines.append(f'<th{width_style}>{header_title}</th>')
-        html_lines.append(f'<th style="width: {col_widths["Thao tác"]};">Thao tác</th>')
-        html_lines.append('</tr></thead><tbody>')
-
         curr = i
         while curr < j:
             k = curr + 1
-            exact_code_curr = str(df.iloc[curr]['Mã quang trắc']) if 'Mã quang trắc' in existing_cols else ''
-            while k < j and str(df.iloc[k]['Mã quang trắc']) == exact_code_curr:
+            exact_code_curr = str(df_display.iloc[curr]['Mã quang trắc']) if 'Mã quang trắc' in existing_cols else ''
+            while k < j and str(df_display.iloc[k]['Mã quang trắc']) == exact_code_curr:
                 k += 1
             sub_rowspan = k - curr
 
             for r in range(curr, k):
                 html_lines.append('<tr>')
+                
                 row_raw = df.iloc[r]
+                job_id = row_raw.get('id')
                 code_res = row_raw.get('_code_reschedule')
                 job_res = row_raw.get('_job_reschedule')
 
                 for col in existing_cols:
-                    val = str(df.iloc[r][col])
+                    val = str(df_display.iloc[r][col])
 
                     if col == 'Trạng thái hạn':
                         if r == i:
                             align = ' style="text-align: center;"'
                             root_border = ' top-border-root' if i > 0 else ''
                             cell_content = val
+                            
                             if all_codes_rescheduled and first_code_res_info:
                                 res_d_fmt = format_rescheduled_display(first_code_res_info['rescheduled_deadline'])
                                 is_due = any(df.iloc[rx].get('_code_reschedule', {}).get('is_due', False) for rx in range(i, j) if df.iloc[rx].get('_code_reschedule'))
+                                
                                 if is_due:
-                                    cell_content += f'<br/><span class="alert-triangle-animated" title="Đã đến hạn ({res_d_fmt})! Xác nhận ở bảng trên để ẩn">⚠️</span>'
+                                    tri_cls = "alert-triangle-animated"
+                                    tri_html = f'<br/><span class="{tri_cls}" title="Đã đến hạn ({res_d_fmt})! Xác nhận ở bảng trên để ẩn">⚠️</span>'
+                                    cell_content += tri_html
                                 else:
-                                    cell_content += f'<br/><div class="speech-bubble-wrapper" tabindex="0"><span style="font-size:16px;">⚠️</span><div class="speech-bubble-pop">Hẹn lại vào: {res_d_fmt}</div></div>'
+                                    tri_html = f'<br/><div class="speech-bubble-wrapper" tabindex="0"><span style="font-size:16px;">⚠️</span><div class="speech-bubble-pop">Hẹn lại vào: {res_d_fmt}</div></div>'
+                                    cell_content += tri_html
 
-                            html_lines.append(f'<td rowspan="{j - i}" class="{bg_class}{root_border}"{align}>{cell_content}</td>')
+                            html_lines.append(f'<td rowspan="{root_rowspan}" class="{bg_class}{root_border}"{align}>{cell_content}</td>')
 
                     elif col in ['Ngày phân công', 'Thời hạn']:
                         if r == i:
                             align = ' style="text-align: center;"'
                             root_border = ' top-border-root' if i > 0 else ''
-                            html_lines.append(f'<td rowspan="{j - i}" class="{bg_class}{root_border}"{align}>{val}</td>')
+                            html_lines.append(f'<td rowspan="{root_rowspan}" class="{bg_class}{root_border}"{align}>{val}</td>')
 
                     elif col in ['Mẫu', 'Mã quang trắc']:
                         if r == curr:
@@ -845,22 +847,31 @@ def render_management_app_custom(df, reschedule_info):
                                 exact_code_clean = exact_code_curr.strip()
                                 if partial_codes_rescheduled and (exact_code_clean in active_res_sub_codes) and code_res and not code_res['ack']:
                                     res_d_fmt = format_rescheduled_display(code_res['rescheduled_deadline'])
-                                    if code_res['is_due']:
-                                        cell_content += f'&nbsp;<span class="alert-triangle-animated" title="Đã đến hạn ({res_d_fmt})! Xác nhận ở bảng trên để ẩn">⚠️</span>'
+                                    is_due = code_res['is_due']
+                                    if is_due:
+                                        tri_cls = "alert-triangle-animated"
+                                        tri_html = f'&nbsp;<span class="{tri_cls}" title="Đã đến hạn ({res_d_fmt})! Xác nhận ở bảng trên để ẩn">⚠️</span>'
+                                        cell_content += tri_html
                                     else:
-                                        cell_content += f'&nbsp;<div class="speech-bubble-wrapper" tabindex="0"><span style="font-size:16px;">⚠️</span><div class="speech-bubble-pop">Hẹn lại vào: {res_d_fmt}</div></div>'
+                                        tri_html = f'&nbsp;<div class="speech-bubble-wrapper" tabindex="0"><span style="font-size:16px;">⚠️</span><div class="speech-bubble-pop">Hẹn lại vào: {res_d_fmt}</div></div>'
+                                        cell_content += tri_html
 
                             html_lines.append(f'<td rowspan="{sub_rowspan}" class="{bg_class}{sub_border}">{cell_content}</td>')
 
                     elif col == 'Công việc':
                         top_border_cls = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if (r == curr and curr > i) else '')
                         cell_content = val
+
                         if job_res and not job_res['ack']:
                             res_d_fmt = format_rescheduled_display(job_res['rescheduled_deadline'])
-                            if job_res['is_due']:
-                                cell_content += f'&nbsp;<span class="alert-triangle-animated" title="Đã đến hạn ({res_d_fmt})! Xác nhận ở bảng trên để ẩn">⚠️</span>'
+                            is_due = job_res['is_due']
+                            if is_due:
+                                tri_cls = "alert-triangle-animated"
+                                tri_html = f'&nbsp;<span class="{tri_cls}" title="Đã đến hạn ({res_d_fmt})! Xác nhận ở bảng trên để ẩn">⚠️</span>'
+                                cell_content += tri_html
                             else:
-                                cell_content += f'&nbsp;<div class="speech-bubble-wrapper" tabindex="0"><span style="font-size:16px;">⚠️</span><div class="speech-bubble-pop">Hẹn lại vào: {res_d_fmt}</div></div>'
+                                tri_html = f'&nbsp;<div class="speech-bubble-wrapper" tabindex="0"><span style="font-size:16px;">⚠️</span><div class="speech-bubble-pop">Hẹn lại vào: {res_d_fmt}</div></div>'
+                                cell_content += tri_html
 
                         html_lines.append(f'<td class="{bg_class}{top_border_cls}">{cell_content}</td>')
 
@@ -869,50 +880,52 @@ def render_management_app_custom(df, reschedule_info):
                         html_lines.append(f'<td class="{bg_class}{top_border_cls}">{val}</td>')
 
                 top_border_cls = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if (r == curr and curr > i) else '')
-                html_lines.append(f'<td class="{bg_class}{top_border_cls}" style="text-align: center;"><!--BTN_{r}--></td>')
+                btn_html = f'<button class="btn-ignore" onclick="if(confirm(\'Có muốn bỏ qua công việc này?\')) {{ window.parent.postMessage({{type: \'IGNORE_JOB\', id: \'{job_id}\'}}, \'*\'); }}">🚫 Bỏ qua</button>'
+                html_lines.append(f'<td class="{bg_class}{top_border_cls}" style="text-align: center;">{btn_html}</td>')
+
                 html_lines.append('</tr>')
-
             curr = k
-
-        html_lines.append('</tbody></table>')
-        full_html_table = "".join(html_lines)
-
-        table_parts = full_html_table.split('<!--BTN_')
-        st.markdown(table_parts[0], unsafe_allow_html=True)
-
-        for p_idx in range(1, len(table_parts)):
-            part = table_parts[p_idx]
-            r_num_str, rest_html = part.split('-->', 1)
-            r_num = int(r_num_str)
-            row_data = df.iloc[r_num]
-            job_id = row_data.get('id')
-
-            col_table_left, col_btn, col_table_right = st.columns([0.92, 0.08, 0.001])
-            with col_btn:
-                if st.button("🚫 Bỏ qua", key=f"btn_ignore_init_{job_id}_{r_num}", help="Bỏ qua công việc này"):
-                    st.session_state[f"confirm_ignore_{job_id}"] = True
-
-            if st.session_state.get(f"confirm_ignore_{job_id}", False):
-                st.warning(f"❓ **Có muốn bỏ qua công việc '{row_data.get('Công việc')}' thuộc mã '{row_data.get('Mã quang trắc')}'?**")
-                c_yes, c_no = st.columns([1, 1])
-                with c_yes:
-                    if st.button("Yes (Đồng ý)", key=f"btn_yes_{job_id}", type="primary"):
-                        save_ignored_job(job_id)
-                        del st.session_state[f"confirm_ignore_{job_id}"]
-                        st.success("Đã bỏ qua công việc!")
-                        st.rerun()
-                with c_no:
-                    if st.button("No (Hủy)", key=f"btn_no_{job_id}"):
-                        del st.session_state[f"confirm_ignore_{job_id}"]
-                        st.rerun()
-
-            st.markdown(rest_html, unsafe_allow_html=True)
 
         group_idx += 1
         i = j
 
+    html_lines.append('</tbody></table>')
+    return "".join(html_lines)
+
 def run_management_app():
     st.subheader("📊 Quản lý Thời hạn Mã Quang Trắc")
+
+    # BẮT SỰ KIỆN XÁC NHẬN BỎ QUA TỪ BẢNG HTML/JS
+    components.html(
+        """
+        <script>
+            window.addEventListener("message", (event) => {
+                if (event.data && event.data.type === "IGNORE_JOB") {
+                    const jobId = event.data.id;
+                    const mainDoc = window.parent.document;
+                    let input = mainDoc.getElementById("ignored_job_trigger_input");
+                    if (!input) {
+                        input = mainDoc.createElement("input");
+                        input.id = "ignored_job_trigger_input";
+                        input.type = "hidden";
+                        mainDoc.body.appendChild(input);
+                    }
+                    input.value = jobId;
+                    input.dispatchEvent(new Event("change", { bubbles: true }));
+                }
+            });
+        </script>
+        """,
+        height=0,
+        width=0
+    )
+
+    # Nút ẩn xử lý việc lưu công việc bỏ qua
+    job_to_ignore = st.text_input("", key="ignored_job_id_input", label_visibility="collapsed")
+    if job_to_ignore:
+        save_ignored_job(job_to_ignore)
+        st.session_state["ignored_job_id_input"] = ""
+        st.rerun()
 
     res_data = load_reschedule_data()
     now_dt = datetime.now()
@@ -983,7 +996,7 @@ def run_management_app():
     if not df_raw.empty:
         df_filtered = df_raw.copy()
 
-        # Bỏ qua các công việc đã bấm nút "Bỏ qua"
+        # Bỏ qua các công việc đã chọn "Bỏ qua"
         ignored_jobs = load_ignored_jobs()
         if ignored_jobs and 'id' in df_filtered.columns:
             df_filtered = df_filtered[~df_filtered['id'].astype(str).isin(ignored_jobs)].copy()
@@ -1214,7 +1227,11 @@ def run_management_app():
             ].copy()
 
         if not df_filtered.empty:
-            render_management_app_custom(df_filtered, res_data)
+            html_table = render_management_html_table(df_filtered, res_data)
+            st.markdown(
+                f'<div style="overflow-x: auto; width: 100%;" translate="no">{html_table}</div>', 
+                unsafe_allow_html=True
+            )
         else:
             st.warning("Không tìm thấy dữ liệu phù hợp với điều kiện lọc.")
     else:
