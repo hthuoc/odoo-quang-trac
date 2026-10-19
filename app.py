@@ -373,11 +373,10 @@ def run_lookup_app():
 
 
 # ===================================================================
-# 3. CHỨC NĂNG 2: QUẢN LÝ (GIAO DIỆN MƯỢT MÀ, LỌC TỨC THÌ TRÊN RAM)
+# 3. CHỨC NĂNG 2: QUẢN LÝ (KHÔNG RELOAD, LỌC TỨC THÌ TRÊN SESSION STATE)
 # ===================================================================
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_management_data_from_odoo():
-    """Tải và XỬ LÝ TOÀN BỘ dữ liệu sẵn trong CACHE để không bị giật lag khi dùng bộ lọc"""
     max_retries = 3
     valid_ids = get_odoo_user_and_partner_ids()
     valid_odoo_fields = get_assign_work_line_fields()
@@ -615,7 +614,6 @@ def fetch_management_data_from_odoo():
             if 'deadline_dt' in df.columns and 'Thời hạn' in df.columns:
                 df['Thời hạn'] = df['deadline_dt'].dt.strftime('%d/%m/%Y').fillna('')
 
-            # Tạo sẵn cột nhóm mã và SẮP XẾP SẴN THEO THỜI HẠN TĂNG DẦN NAY TRONG CACHE
             if 'Mã quang trắc' in df.columns:
                 df['_group_code'] = df['Mã quang trắc'].astype(str).str.split('.').str[0].str.strip()
             else:
@@ -770,8 +768,12 @@ def run_management_app():
     </div>
     """, unsafe_allow_html=True)
 
-    with st.spinner("Đang tải dữ liệu từ Odoo..."):
-        df_raw = fetch_management_data_from_odoo()
+    # LƯU DATAFRAME VÀO SESSION STATE ĐỂ BỘ LỌC CẮT NGAY LẬP TỨC MÀ KHÔNG HIỆN SPINNER
+    if 'mgmt_df_raw' not in st.session_state:
+        with st.spinner("Đang tải dữ liệu ban đầu từ Odoo..."):
+            st.session_state['mgmt_df_raw'] = fetch_management_data_from_odoo()
+
+    df_raw = st.session_state['mgmt_df_raw']
 
     if not df_raw.empty:
         df_filtered = df_raw.copy()
@@ -789,7 +791,7 @@ def run_management_app():
                 ~df_filtered['Công việc'].astype(str).str.strip().str.lower().str.startswith('năng lượng')
             ].copy()
 
-        # BỘ LỌC TẬN DỤNG DỮ LIỆU ĐÃ LƯU TRÊN RAM (TỐC ĐỘ TỨC THÌ)
+        # BỘ LỌC DỮ LIỆU TỨC THÌ TRÊN RAM (KHÔNG BẮT CƠ CHẾ KẾT NỐI LAI)
         with st.container():
             col1, col2, col3, col4, col5, col6 = st.columns(6)
 
@@ -901,6 +903,8 @@ if st.session_state['app_mode'] is not None:
     with col_back:
         if st.button("⬅️ Quay lại trang chủ", use_container_width=True):
             st.session_state['app_mode'] = None
+            if 'mgmt_df_raw' in st.session_state:
+                del st.session_state['mgmt_df_raw']
             st.rerun()
 
 if st.session_state['app_mode'] is None:
