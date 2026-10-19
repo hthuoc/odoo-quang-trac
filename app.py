@@ -373,7 +373,7 @@ def run_lookup_app():
 
 
 # ===================================================================
-# 3. CHỨC NĂNG 2: QUẢN LÝ (DÙNG PANDAS HTML SIÊU TỐC THAY CHO VÒNG LẶP)
+# 3. CHỨC NĂNG 2: QUẢN LÝ (GIỮ NGUYÊN BẢNG HTML CỦ 100% + THÊM FRAGMENT)
 # ===================================================================
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_management_data_from_odoo():
@@ -635,8 +635,8 @@ def fetch_management_data_from_odoo():
                 st.error(f"Lỗi kết nối hoặc truy vấn Odoo: {e}")
                 return pd.DataFrame()
 
-# TỐI ƯU HÀM TẠO BẢNG SIÊU TỐC DÙNG PANDAS HTML (CHẠY TRONG DƯỚI 0.01 GIÂY)
-def render_management_fast_html(df):
+# NGUYÊN BẢN GIAO DIỆN BẢNG HTML CỦ (CÓ MERGE ROWSPAN + BORDER PHÂN NHÓM)
+def render_management_html_table(df):
     if df.empty:
         return ""
 
@@ -646,31 +646,215 @@ def render_management_fast_html(df):
     ]
     existing_cols = [c for c in cols_order if c in df.columns]
 
-    df_out = df[existing_cols].copy()
-    
-    # Tạo nút Bỏ qua cực nhanh cho từng dòng
-    df_out['Thao tác'] = df['id'].apply(
-        lambda j_id: f'<a href="?ignore_job_id={j_id}" target="_self" onclick="return confirm(\'Có muốn bỏ qua công việc này?\');" style="text-decoration:none;"><button class="btn-ignore">🚫 Bỏ qua</button></a>'
-    )
+    col_widths = {
+        'Trạng thái hạn': '60px',
+        'Ngày phân công': '100px',
+        'Thời hạn': '100px',
+        'Mẫu': '180px',
+        'Mã quang trắc': '160px',
+        'Công việc': '220px',
+        'Testing method': '220px',
+        'ĐVT': '70px',
+        'Ghi chú': '100px',
+        'Thao tác': '90px'
+    }
 
-    # Dùng hàm engine HTML mã hóa C/C++ của Pandas
-    html_table = df_out.to_html(
-        escape=False, 
-        index=False, 
-        classes="custom-table-mgmt"
-    )
+    html_lines = []
+    html_lines.append('<style>')
+    html_lines.append('  .custom-table-mgmt { width: 100%; border-collapse: collapse !important; margin-top: 15px; font-family: sans-serif; font-size: 14px; table-layout: fixed; }')
+    html_lines.append('  .custom-table-mgmt th { background-color: #E2E8F0; color: #1A202C; font-weight: bold; text-align: center; border: 1px solid #CBD5E0; padding: 10px 8px; }')
+    html_lines.append('  .custom-table-mgmt td { border: 1px solid #CBD5E0; padding: 8px 8px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }')
+    html_lines.append('  .top-border-root { border-top: 2.5px solid #2D3748 !important; }')
+    html_lines.append('  .top-border-sub { border-top: 1.5px solid #718096 !important; }')
+    html_lines.append('  .bg-group-0 { background-color: #FFFFFF !important; }')
+    html_lines.append('  .bg-group-1 { background-color: #EDF2F7 !important; }')
+    html_lines.append('  .btn-ignore { background-color: #FFF; border: 1px solid #CBD5E0; border-radius: 6px; padding: 6px 10px; cursor: pointer; color: #E53E3E; font-weight: bold; font-size: 13px; }')
+    html_lines.append('  .btn-ignore:hover { background-color: #FED7D7; }')
+    html_lines.append('</style>')
 
-    style = """
-    <style>
-      .custom-table-mgmt { width: 100%; border-collapse: collapse !important; margin-top: 15px; font-family: sans-serif; font-size: 14px; table-layout: fixed; }
-      .custom-table-mgmt th { background-color: #E2E8F0; color: #1A202C; font-weight: bold; text-align: center; border: 1px solid #CBD5E0; padding: 10px 8px; }
-      .custom-table-mgmt td { border: 1px solid #CBD5E0; padding: 8px 8px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }
-      .custom-table-mgmt tr:nth-child(even) { background-color: #FAFAFA; }
-      .btn-ignore { background-color: #FFF; border: 1px solid #CBD5E0; border-radius: 6px; padding: 6px 10px; cursor: pointer; color: #E53E3E; font-weight: bold; font-size: 13px; }
-      .btn-ignore:hover { background-color: #FED7D7; }
-    </style>
-    """
-    return style + html_table
+    html_lines.append('<table class="custom-table-mgmt"><thead><tr>')
+    for col in existing_cols:
+        header_title = "" if col == 'Trạng thái hạn' else col
+        width_style = f' style="width: {col_widths.get(col, "auto")};"'
+        html_lines.append(f'<th{width_style}>{header_title}</th>')
+    html_lines.append(f'<th style="width: {col_widths["Thao tác"]};">Thao tác</th>')
+    html_lines.append('</tr></thead><tbody>')
+
+    n = len(df)
+    i = 0
+    group_idx = 0
+
+    while i < n:
+        j = i + 1
+        root_code_i = df.iloc[i]['_group_code']
+        while j < n and df.iloc[j]['_group_code'] == root_code_i:
+            j += 1
+        root_rowspan = j - i
+
+        bg_class = f"bg-group-{group_idx % 2}"
+
+        curr = i
+        while curr < j:
+            k = curr + 1
+            exact_code_curr = str(df.iloc[curr]['Mã quang trắc']) if 'Mã quang trắc' in existing_cols else ''
+            while k < j and str(df.iloc[k]['Mã quang trắc']) == exact_code_curr:
+                k += 1
+            sub_rowspan = k - curr
+
+            for r in range(curr, k):
+                html_lines.append('<tr>')
+                row_raw = df.iloc[r]
+                job_id = row_raw.get('id')
+
+                for col in existing_cols:
+                    val = str(df.iloc[r][col])
+
+                    if col in ['Trạng thái hạn', 'Ngày phân công', 'Thời hạn']:
+                        if r == i:
+                            align = ' style="text-align: center;"'
+                            root_border = ' top-border-root' if i > 0 else ''
+                            html_lines.append(f'<td rowspan="{root_rowspan}" class="{bg_class}{root_border}"{align}>{val}</td>')
+
+                    elif col in ['Mẫu', 'Mã quang trắc']:
+                        if r == curr:
+                            sub_border = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if curr > i else '')
+                            html_lines.append(f'<td rowspan="{sub_rowspan}" class="{bg_class}{sub_border}">{val}</td>')
+
+                    else:
+                        top_border_cls = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if (r == curr and curr > i) else '')
+                        html_lines.append(f'<td class="{bg_class}{top_border_cls}">{val}</td>')
+
+                top_border_cls = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if (r == curr and curr > i) else '')
+                btn_url = f"?ignore_job_id={job_id}"
+                btn_html = f'<a href="{btn_url}" target="_self" onclick="return confirm(\'Có muốn bỏ qua công việc này?\');" style="text-decoration:none;"><button class="btn-ignore">🚫 Bỏ qua</button></a>'
+                html_lines.append(f'<td class="{bg_class}{top_border_cls}" style="text-align: center;">{btn_html}</td>')
+
+                html_lines.append('</tr>')
+            curr = k
+
+        group_idx += 1
+        i = j
+
+    html_lines.append('</tbody></table>')
+    return "".join(html_lines)
+
+
+# CHỐNG RELOAD TOÀN TRANG BẰNG KHU VỰC CỦC BỘ STREAMLIT FRAGMENT
+@st.fragment
+def render_filtered_management_section(df_raw):
+    df_filtered = df_raw.copy()
+
+    ignored_jobs = load_ignored_jobs()
+    if ignored_jobs and 'id' in df_filtered.columns:
+        df_filtered = df_filtered[~df_filtered['id'].astype(str).isin(ignored_jobs)].copy()
+
+    if df_filtered.empty:
+        st.info("Tất cả công việc đã được hoàn thành hoặc bỏ qua.")
+        return
+
+    if 'Công việc' in df_filtered.columns:
+        df_filtered = df_filtered[
+            ~df_filtered['Công việc'].astype(str).str.strip().str.lower().str.startswith('năng lượng')
+        ].copy()
+
+    # BỘ LỌC CỤC BỘ (CHỈ RERUN BẢNG BÊN DƯỚI)
+    with st.container():
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
+
+        with col1:
+            filter_start_date = st.date_input("Ngày phân công", value=None, format="DD/MM/YYYY")
+
+        with col2:
+            filter_deadline = st.date_input("Thời hạn", value=None, format="DD/MM/YYYY")
+
+        all_codes = sorted([c for c in df_filtered['Mã quang trắc'].unique() if c]) if 'Mã quang trắc' in df_filtered.columns else []
+        all_works = sorted([w for w in df_filtered['Công việc'].unique() if w]) if 'Công việc' in df_filtered.columns else []
+        all_methods = sorted([m for m in df_filtered['Testing method'].unique() if m]) if 'Testing method' in df_filtered.columns else []
+        
+        assignees_set = set()
+        if 'Người được phân công' in df_filtered.columns:
+            for val in df_filtered['Người được phân công'].dropna():
+                for p in str(val).split(','):
+                    p_clean = p.strip()
+                    if p_clean:
+                        assignees_set.add(p_clean)
+        all_assignees = sorted(list(assignees_set))
+
+        with col3:
+            selected_codes = st.multiselect("Mã quang trắc", options=all_codes, placeholder="Tất cả mã")
+
+        with col4:
+            selected_works = st.multiselect("Công việc", options=all_works, placeholder="Tất cả công việc")
+
+        with col5:
+            selected_methods = st.multiselect("Testing method", options=all_methods, placeholder="Tất cả phương pháp")
+
+        with col6:
+            selected_assignees = st.multiselect("Người được phân công", options=all_assignees, placeholder="Tất cả người làm")
+
+    if filter_start_date and filter_deadline:
+        df_filtered = df_filtered[
+            (df_filtered['start_date_dt'].dt.date >= filter_start_date) & 
+            (df_filtered['deadline_dt'].dt.date <= filter_deadline)
+        ]
+    elif filter_start_date:
+        df_filtered = df_filtered[df_filtered['start_date_dt'].dt.date == filter_start_date]
+    elif filter_deadline:
+        df_filtered = df_filtered[df_filtered['deadline_dt'].dt.date == filter_deadline]
+
+    if selected_codes:
+        df_filtered = df_filtered[df_filtered['Mã quang trắc'].isin(selected_codes)]
+
+    if selected_works:
+        df_filtered = df_filtered[df_filtered['Công việc'].isin(selected_works)]
+
+    if selected_methods:
+        df_filtered = df_filtered[df_filtered['Testing method'].isin(selected_methods)]
+
+    if selected_assignees:
+        def match_assignees(val):
+            val_str = str(val)
+            return any(assignee in val_str for assignee in selected_assignees)
+        df_filtered = df_filtered[df_filtered['Người được phân công'].apply(match_assignees)]
+
+    if 'ĐVT' in df_filtered.columns:
+        df_filtered = df_filtered[
+            df_filtered['ĐVT'].astype(str).str.strip().ne('') & 
+            df_filtered['ĐVT'].astype(str).str.strip().ne('False')
+        ].copy()
+
+    today_date = date.today()
+    def update_status_circle(row):
+        deadline_dt = row.get('deadline_dt')
+        if pd.isna(deadline_dt):
+            return '<div style="text-align: center;"><span style="display:inline-block; width:14px; height:14px; border-radius:50%; background-color:#CBD5E0;" title="Không có thời hạn"></span></div>'
+        d_date = deadline_dt.date()
+        diff_days = (d_date - today_date).days
+        if diff_days < 0:
+            color = "#E53E3E"
+            title = f"Quá hạn ({abs(diff_days)} ngày)"
+        elif diff_days == 0:
+            color = "#D69E2E"
+            title = "Đến hạn hôm nay"
+        elif diff_days == 1:
+            color = "#3182CE"
+            title = "Đến hạn ngày mai"
+        else:
+            color = "#38A169"
+            title = f"Còn hạn ({diff_days} ngày)"
+        return f'<div style="text-align: center;"><span style="display:inline-block; width:14px; height:14px; border-radius:50%; background-color:{color};" title="{title}"></span></div>'
+
+    df_filtered['Trạng thái hạn'] = df_filtered.apply(update_status_circle, axis=1)
+
+    if not df_filtered.empty:
+        html_table = render_management_html_table(df_filtered)
+        st.markdown(
+            f'<div style="overflow-x: auto; width: 100%;" translate="no">{html_table}</div>', 
+            unsafe_allow_html=True
+        )
+    else:
+        st.warning("Không tìm thấy dữ liệu phù hợp với điều kiện lọc.")
+
 
 def run_management_app():
     st.subheader("📊 Quản lý Thời hạn Mã Quang Trắc")
@@ -710,118 +894,7 @@ def run_management_app():
     df_raw = st.session_state['mgmt_df_raw']
 
     if not df_raw.empty:
-        df_filtered = df_raw.copy()
-
-        ignored_jobs = load_ignored_jobs()
-        if ignored_jobs and 'id' in df_filtered.columns:
-            df_filtered = df_filtered[~df_filtered['id'].astype(str).isin(ignored_jobs)].copy()
-
-        if df_filtered.empty:
-            st.info("Tất cả công việc đã được hoàn thành hoặc bỏ qua.")
-            return
-
-        if 'Công việc' in df_filtered.columns:
-            df_filtered = df_filtered[
-                ~df_filtered['Công việc'].astype(str).str.strip().str.lower().str.startswith('năng lượng')
-            ].copy()
-
-        # BỘ LỌC CỰC NHANH (KHÔNG RE-LOAD)
-        with st.container():
-            col1, col2, col3, col4, col5, col6 = st.columns(6)
-
-            with col1:
-                filter_start_date = st.date_input("Ngày phân công", value=None, format="DD/MM/YYYY")
-
-            with col2:
-                filter_deadline = st.date_input("Thời hạn", value=None, format="DD/MM/YYYY")
-
-            all_codes = sorted([c for c in df_filtered['Mã quang trắc'].unique() if c]) if 'Mã quang trắc' in df_filtered.columns else []
-            all_works = sorted([w for w in df_filtered['Công việc'].unique() if w]) if 'Công việc' in df_filtered.columns else []
-            all_methods = sorted([m for m in df_filtered['Testing method'].unique() if m]) if 'Testing method' in df_filtered.columns else []
-            
-            assignees_set = set()
-            if 'Người được phân công' in df_filtered.columns:
-                for val in df_filtered['Người được phân công'].dropna():
-                    for p in str(val).split(','):
-                        p_clean = p.strip()
-                        if p_clean:
-                            assignees_set.add(p_clean)
-            all_assignees = sorted(list(assignees_set))
-
-            with col3:
-                selected_codes = st.multiselect("Mã quang trắc", options=all_codes, placeholder="Tất cả mã")
-
-            with col4:
-                selected_works = st.multiselect("Công việc", options=all_works, placeholder="Tất cả công việc")
-
-            with col5:
-                selected_methods = st.multiselect("Testing method", options=all_methods, placeholder="Tất cả phương pháp")
-
-            with col6:
-                selected_assignees = st.multiselect("Người được phân công", options=all_assignees, placeholder="Tất cả người làm")
-
-        if filter_start_date and filter_deadline:
-            df_filtered = df_filtered[
-                (df_filtered['start_date_dt'].dt.date >= filter_start_date) & 
-                (df_filtered['deadline_dt'].dt.date <= filter_deadline)
-            ]
-        elif filter_start_date:
-            df_filtered = df_filtered[df_filtered['start_date_dt'].dt.date == filter_start_date]
-        elif filter_deadline:
-            df_filtered = df_filtered[df_filtered['deadline_dt'].dt.date == filter_deadline]
-
-        if selected_codes:
-            df_filtered = df_filtered[df_filtered['Mã quang trắc'].isin(selected_codes)]
-
-        if selected_works:
-            df_filtered = df_filtered[df_filtered['Công việc'].isin(selected_works)]
-
-        if selected_methods:
-            df_filtered = df_filtered[df_filtered['Testing method'].isin(selected_methods)]
-
-        if selected_assignees:
-            def match_assignees(val):
-                val_str = str(val)
-                return any(assignee in val_str for assignee in selected_assignees)
-            df_filtered = df_filtered[df_filtered['Người được phân công'].apply(match_assignees)]
-
-        if 'ĐVT' in df_filtered.columns:
-            df_filtered = df_filtered[
-                df_filtered['ĐVT'].astype(str).str.strip().ne('') & 
-                df_filtered['ĐVT'].astype(str).str.strip().ne('False')
-            ].copy()
-
-        today_date = date.today()
-        def update_status_circle(row):
-            deadline_dt = row.get('deadline_dt')
-            if pd.isna(deadline_dt):
-                return '<div style="text-align: center;"><span style="display:inline-block; width:14px; height:14px; border-radius:50%; background-color:#CBD5E0;" title="Không có thời hạn"></span></div>'
-            d_date = deadline_dt.date()
-            diff_days = (d_date - today_date).days
-            if diff_days < 0:
-                color = "#E53E3E"
-                title = f"Quá hạn ({abs(diff_days)} ngày)"
-            elif diff_days == 0:
-                color = "#D69E2E"
-                title = "Đến hạn hôm nay"
-            elif diff_days == 1:
-                color = "#3182CE"
-                title = "Đến hạn ngày mai"
-            else:
-                color = "#38A169"
-                title = f"Còn hạn ({diff_days} ngày)"
-            return f'<div style="text-align: center;"><span style="display:inline-block; width:14px; height:14px; border-radius:50%; background-color:{color};" title="{title}"></span></div>'
-
-        df_filtered['Trạng thái hạn'] = df_filtered.apply(update_status_circle, axis=1)
-
-        if not df_filtered.empty:
-            html_table = render_management_fast_html(df_filtered)
-            st.markdown(
-                f'<div style="overflow-x: auto; width: 100%;" translate="no">{html_table}</div>', 
-                unsafe_allow_html=True
-            )
-        else:
-            st.warning("Không tìm thấy dữ liệu phù hợp với điều kiện lọc.")
+        render_filtered_management_section(df_raw)
     else:
         st.info("Không tìm thấy mã quang trắc nào được phân công từ ngày 01/09/2026.")
 
