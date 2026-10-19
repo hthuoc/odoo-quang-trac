@@ -432,7 +432,7 @@ def run_lookup_app():
 
 
 # ===================================================================
-# 3. CHỨC NĂNG 2: QUẢN LÝ (TỐI ƯU SIÊU TỐC ĐỘ RENDER)
+# 3. CHỨC NĂNG 2: QUẢN LÝ (SẮP XẾP SẮC BẢNG THEO ĐÚNG THỜI HẠN)
 # ===================================================================
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_management_data_from_odoo():
@@ -660,7 +660,7 @@ def fetch_management_data_from_odoo():
                                     
                                     if 'kjeldahl' in r_method and r_code in codes_with_completed_dumas:
                                         return False
-                                    if 'dumas' in r_method and r_code in codes_with_completed_kjeldahl:
+                                    if 'dumas' in r_method and r_code in codes_with_completed_dumas:
                                         return False
                                     return True
                                 
@@ -683,7 +683,7 @@ def fetch_management_data_from_odoo():
                 st.error(f"Lỗi kết nối hoặc truy vấn Odoo: {e}")
                 return pd.DataFrame()
 
-# TỐI ƯU HÀM TẠO BẢNG HTML CỰC NHANH
+# HÀM DỰNG BẢNG HTML CHUẨN XÁC THEO THỨ TỰ SẮP XẾP THỜI HẠN TĂNG DẦN
 def render_management_html_table(df):
     if df.empty:
         return ""
@@ -693,11 +693,6 @@ def render_management_html_table(df):
         'Mẫu', 'Mã quang trắc', 'Công việc', 'Testing method', 'ĐVT', 'Ghi chú'
     ]
     existing_cols = [c for c in cols_order if c in df.columns]
-
-    if 'Mã quang trắc' in df.columns:
-        df['_group_code'] = df['Mã quang trắc'].astype(str).str.split('.').str[0].str.strip()
-    else:
-        df['_group_code'] = df.index.astype(str)
 
     col_widths = {
         'Trạng thái hạn': '60px',
@@ -712,71 +707,85 @@ def render_management_html_table(df):
         'Thao tác': '90px'
     }
 
-    html = []
-    html.append('''<style>
-      .custom-table-mgmt { width: 100%; border-collapse: collapse !important; margin-top: 15px; font-family: sans-serif; font-size: 14px; table-layout: fixed; }
-      .custom-table-mgmt th { background-color: #E2E8F0; color: #1A202C; font-weight: bold; text-align: center; border: 1px solid #CBD5E0; padding: 10px 8px; }
-      .custom-table-mgmt td { border: 1px solid #CBD5E0; padding: 8px 8px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }
-      .top-border-root { border-top: 2.5px solid #2D3748 !important; }
-      .top-border-sub { border-top: 1.5px solid #718096 !important; }
-      .bg-group-0 { background-color: #FFFFFF !important; }
-      .bg-group-1 { background-color: #EDF2F7 !important; }
-      .btn-ignore { background-color: #FFF; border: 1px solid #CBD5E0; border-radius: 6px; padding: 6px 10px; cursor: pointer; color: #E53E3E; font-weight: bold; font-size: 13px; }
-      .btn-ignore:hover { background-color: #FED7D7; }
-    </style>''')
+    html_lines = []
+    html_lines.append('<style>')
+    html_lines.append('  .custom-table-mgmt { width: 100%; border-collapse: collapse !important; margin-top: 15px; font-family: sans-serif; font-size: 14px; table-layout: fixed; }')
+    html_lines.append('  .custom-table-mgmt th { background-color: #E2E8F0; color: #1A202C; font-weight: bold; text-align: center; border: 1px solid #CBD5E0; padding: 10px 8px; }')
+    html_lines.append('  .custom-table-mgmt td { border: 1px solid #CBD5E0; padding: 8px 8px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }')
+    html_lines.append('  .top-border-root { border-top: 2.5px solid #2D3748 !important; }')
+    html_lines.append('  .top-border-sub { border-top: 1.5px solid #718096 !important; }')
+    html_lines.append('  .bg-group-0 { background-color: #FFFFFF !important; }')
+    html_lines.append('  .bg-group-1 { background-color: #EDF2F7 !important; }')
+    html_lines.append('  .btn-ignore { background-color: #FFF; border: 1px solid #CBD5E0; border-radius: 6px; padding: 6px 10px; cursor: pointer; color: #E53E3E; font-weight: bold; font-size: 13px; }')
+    html_lines.append('  .btn-ignore:hover { background-color: #FED7D7; }')
+    html_lines.append('</style>')
 
-    html.append('<table class="custom-table-mgmt"><thead><tr>')
+    html_lines.append('<table class="custom-table-mgmt"><thead><tr>')
     for col in existing_cols:
         header_title = "" if col == 'Trạng thái hạn' else col
-        html.append(f'<th style="width: {col_widths.get(col, "auto")};">{header_title}</th>')
-    html.append(f'<th style="width: {col_widths["Thao tác"]};">Thao tác</th></tr></thead><tbody>')
+        width_style = f' style="width: {col_widths.get(col, "auto")};"'
+        html_lines.append(f'<th{width_style}>{header_title}</th>')
+    html_lines.append(f'<th style="width: {col_widths["Thao tác"]};">Thao tác</th>')
+    html_lines.append('</tr></thead><tbody>')
 
-    # Dùng GroupBy của pandas để dựng bảng cực nhanh
+    n = len(df)
+    i = 0
     group_idx = 0
-    for root_code, group in df.groupby('_group_code', sort=False):
-        root_rowspan = len(group)
+
+    # Dùng thuật toán nhóm đúng thứ tự dataframe đã được sort theo deadline_dt
+    while i < n:
+        j = i + 1
+        root_code_i = df.iloc[i]['_group_code']
+        while j < n and df.iloc[j]['_group_code'] == root_code_i:
+            j += 1
+        root_rowspan = j - i
+
         bg_class = f"bg-group-{group_idx % 2}"
-        first_row_in_group = True
 
-        for sub_code, sub_group in group.groupby('Mã quang trắc', sort=False):
-            sub_rowspan = len(sub_group)
-            first_row_in_sub = True
+        curr = i
+        while curr < j:
+            k = curr + 1
+            exact_code_curr = str(df.iloc[curr]['Mã quang trắc']) if 'Mã quang trắc' in existing_cols else ''
+            while k < j and str(df.iloc[k]['Mã quang trắc']) == exact_code_curr:
+                k += 1
+            sub_rowspan = k - curr
 
-            for idx, row in sub_group.iterrows():
-                html.append('<tr>')
-                job_id = row.get('id')
+            for r in range(curr, k):
+                html_lines.append('<tr>')
+                row_raw = df.iloc[r]
+                job_id = row_raw.get('id')
 
                 for col in existing_cols:
-                    val = str(row.get(col, ''))
+                    val = str(df.iloc[r][col])
 
                     if col in ['Trạng thái hạn', 'Ngày phân công', 'Thời hạn']:
-                        if first_row_in_group:
+                        if r == i:
                             align = ' style="text-align: center;"'
-                            root_border = ' top-border-root' if group_idx > 0 else ''
-                            html.append(f'<td rowspan="{root_rowspan}" class="{bg_class}{root_border}"{align}>{val}</td>')
+                            root_border = ' top-border-root' if i > 0 else ''
+                            html_lines.append(f'<td rowspan="{root_rowspan}" class="{bg_class}{root_border}"{align}>{val}</td>')
 
                     elif col in ['Mẫu', 'Mã quang trắc']:
-                        if first_row_in_sub:
-                            sub_border = ' top-border-root' if (first_row_in_group and group_idx > 0) else (' top-border-sub' if not first_row_in_group else '')
-                            html.append(f'<td rowspan="{sub_rowspan}" class="{bg_class}{sub_border}">{val}</td>')
+                        if r == curr:
+                            sub_border = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if curr > i else '')
+                            html_lines.append(f'<td rowspan="{sub_rowspan}" class="{bg_class}{sub_border}">{val}</td>')
 
                     else:
-                        top_border_cls = ' top-border-root' if (first_row_in_group and group_idx > 0) else (' top-border-sub' if (first_row_in_sub and not first_row_in_group) else '')
-                        html.append(f'<td class="{bg_class}{top_border_cls}">{val}</td>')
+                        top_border_cls = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if (r == curr and curr > i) else '')
+                        html_lines.append(f'<td class="{bg_class}{top_border_cls}">{val}</td>')
 
-                top_border_cls = ' top-border-root' if (first_row_in_group and group_idx > 0) else (' top-border-sub' if (first_row_in_sub and not first_row_in_group) else '')
+                top_border_cls = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if (r == curr and curr > i) else '')
                 btn_url = f"?ignore_job_id={job_id}"
                 btn_html = f'<a href="{btn_url}" target="_self" onclick="return confirm(\'Có muốn bỏ qua công việc này?\');" style="text-decoration:none;"><button class="btn-ignore">🚫 Bỏ qua</button></a>'
-                html.append(f'<td class="{bg_class}{top_border_cls}" style="text-align: center;">{btn_html}</td>')
+                html_lines.append(f'<td class="{bg_class}{top_border_cls}" style="text-align: center;">{btn_html}</td>')
 
-                html.append('</tr>')
-                first_row_in_group = False
-                first_row_in_sub = False
+                html_lines.append('</tr>')
+            curr = k
 
         group_idx += 1
+        i = j
 
-    html.append('</tbody></table>')
-    return "".join(html)
+    html_lines.append('</tbody></table>')
+    return "".join(html_lines)
 
 def run_management_app():
     st.subheader("📊 Quản lý Thời hạn Mã Quang Trắc")
@@ -788,44 +797,6 @@ def run_management_app():
         save_ignored_job(job_id_to_ignore)
         st.query_params.clear()
         st.rerun()
-
-    res_data = load_reschedule_data()
-    now_dt = datetime.now()
-
-    due_codes_list = []
-    due_jobs_list = []
-
-    for c_k, c_inf in res_data.get("codes", {}).items():
-        if not c_inf.get("ack", False):
-            res_dt = parse_reschedule_dt(c_inf["rescheduled_deadline"])
-            if res_dt and now_dt >= res_dt:
-                due_codes_list.append(c_k)
-
-    for j_k, j_inf in res_data.get("jobs", {}).items():
-        if not j_inf.get("ack", False):
-            res_dt = parse_reschedule_dt(j_inf["rescheduled_deadline"])
-            if res_dt and now_dt >= res_dt:
-                due_jobs_list.append(j_k)
-
-    if due_codes_list or due_jobs_list:
-        with st.container():
-            st.info("🔔 **Có các lịch hẹn lại đã đến hạn cần xác nhận đã xem:**")
-            ack_cols = st.columns(3)
-            col_idx = 0
-            for dc in due_codes_list:
-                with ack_cols[col_idx % 3]:
-                    if st.button(f"✔ Đã xem Mã: {dc}", key=f"btn_ack_code_{dc}", type="primary"):
-                        ack_reschedule("code", dc)
-                        st.rerun()
-                col_idx += 1
-            for dj in due_jobs_list:
-                disp_j = dj.replace("__", " - ")
-                with ack_cols[col_idx % 3]:
-                    if st.button(f"✔ Đã xem Chỉ tiêu: {disp_j}", key=f"btn_ack_job_{dj}", type="primary"):
-                        ack_reschedule("job", dj)
-                        st.rerun()
-                col_idx += 1
-        st.markdown("---")
 
     st.markdown("""
     <div style="display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; font-size: 14px; margin-bottom: 20px; background-color: #f8f9fa; padding: 12px 16px; border-radius: 6px; border: 1px solid #e9ecef;">
@@ -933,6 +904,18 @@ def run_management_app():
                 df_filtered['ĐVT'].astype(str).str.strip().ne('') & 
                 df_filtered['ĐVT'].astype(str).str.strip().ne('False')
             ].copy()
+
+        # TẠO CỘT NHÓM MÃ VÀ SẮP XẾP CHUẨN XÁC THEO HẠN TĂNG DẦN
+        if 'Mã quang trắc' in df_filtered.columns:
+            df_filtered['_group_code'] = df_filtered['Mã quang trắc'].astype(str).str.split('.').str[0].str.strip()
+        else:
+            df_filtered['_group_code'] = df_filtered.index.astype(str)
+
+        df_filtered = df_filtered.sort_values(
+            by=['deadline_dt', '_group_code', 'id'], 
+            ascending=[True, True, True], 
+            na_position='last'
+        ).reset_index(drop=True)
 
         today_date = date.today()
         def update_status_circle(row):
