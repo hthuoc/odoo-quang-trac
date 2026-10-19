@@ -33,38 +33,6 @@ def save_reschedule_data(data):
     with open(RESCHEDULE_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-def add_reschedule_code(code, new_deadline_str, original_deadline_str):
-    data = load_reschedule_data()
-    data["codes"][code] = {
-        "original_deadline": original_deadline_str,
-        "rescheduled_deadline": new_deadline_str,
-        "ack": False
-    }
-    save_reschedule_data(data)
-
-def add_reschedule_job(job_key, new_deadline_str, original_deadline_str):
-    data = load_reschedule_data()
-    data["jobs"][job_key] = {
-        "original_deadline": original_deadline_str,
-        "rescheduled_deadline": new_deadline_str,
-        "ack": False
-    }
-    save_reschedule_data(data)
-
-def ack_reschedule(res_type, key):
-    data = load_reschedule_data()
-    if res_type == "code" and key in data.get("codes", {}):
-        data["codes"][key]["ack"] = True
-        save_reschedule_data(data)
-    elif res_type == "code_group":
-        for k in key.split(","):
-            if k in data.get("codes", {}):
-                data["codes"][k]["ack"] = True
-        save_reschedule_data(data)
-    elif res_type == "job" and key in data.get("jobs", {}):
-        data["jobs"][key]["ack"] = True
-        save_reschedule_data(data)
-
 def load_ignored_jobs():
     if os.path.exists(IGNORED_JOBS_FILE):
         try:
@@ -160,33 +128,6 @@ def get_assign_work_line_fields():
         return set(existing_fields_info.keys())
     except Exception:
         return set()
-
-def parse_reschedule_dt(dt_str):
-    if not dt_str:
-        return None
-    dt_str = str(dt_str).strip()
-    formats = [
-        "%Y-%m-%d %H:%M:%S",
-        "%Y-%m-%d %H:%M",
-        "%d/%m/%Y %H:%M:%S",
-        "%d/%m/%Y %H:%M",
-        "%Y-%m-%d",
-        "%d/%m/%Y"
-    ]
-    for fmt in formats:
-        try:
-            return datetime.strptime(dt_str, fmt)
-        except ValueError:
-            pass
-    return None
-
-def format_rescheduled_display(dt_str):
-    if not dt_str:
-        return ''
-    dt = parse_reschedule_dt(dt_str)
-    if dt:
-        return dt.strftime("%d/%m/%Y %H:%M")
-    return str(dt_str)
 
 def clean_odoo_field_value(x):
     if not x:
@@ -432,10 +373,11 @@ def run_lookup_app():
 
 
 # ===================================================================
-# 3. CHỨC NĂNG 2: QUẢN LÝ (SẮP XẾP SẮC BẢNG THEO ĐÚNG THỜI HẠN)
+# 3. CHỨC NĂNG 2: QUẢN LÝ (GIAO DIỆN MƯỢT MÀ, LỌC TỨC THÌ TRÊN RAM)
 # ===================================================================
 @st.cache_data(ttl=600, show_spinner=False)
 def fetch_management_data_from_odoo():
+    """Tải và XỬ LÝ TOÀN BỘ dữ liệu sẵn trong CACHE để không bị giật lag khi dùng bộ lọc"""
     max_retries = 3
     valid_ids = get_odoo_user_and_partner_ids()
     valid_odoo_fields = get_assign_work_line_fields()
@@ -673,6 +615,18 @@ def fetch_management_data_from_odoo():
             if 'deadline_dt' in df.columns and 'Thời hạn' in df.columns:
                 df['Thời hạn'] = df['deadline_dt'].dt.strftime('%d/%m/%Y').fillna('')
 
+            # Tạo sẵn cột nhóm mã và SẮP XẾP SẴN THEO THỜI HẠN TĂNG DẦN NAY TRONG CACHE
+            if 'Mã quang trắc' in df.columns:
+                df['_group_code'] = df['Mã quang trắc'].astype(str).str.split('.').str[0].str.strip()
+            else:
+                df['_group_code'] = df.index.astype(str)
+
+            df = df.sort_values(
+                by=['deadline_dt', '_group_code', 'id'], 
+                ascending=[True, True, True], 
+                na_position='last'
+            ).reset_index(drop=True)
+
             return df
 
         except Exception as e:
@@ -683,7 +637,6 @@ def fetch_management_data_from_odoo():
                 st.error(f"Lỗi kết nối hoặc truy vấn Odoo: {e}")
                 return pd.DataFrame()
 
-# HÀM DỰNG BẢNG HTML CHUẨN XÁC THEO THỨ TỰ SẮP XẾP THỜI HẠN TĂNG DẦN
 def render_management_html_table(df):
     if df.empty:
         return ""
@@ -732,7 +685,6 @@ def render_management_html_table(df):
     i = 0
     group_idx = 0
 
-    # Dùng thuật toán nhóm đúng thứ tự dataframe đã được sort theo deadline_dt
     while i < n:
         j = i + 1
         root_code_i = df.iloc[i]['_group_code']
@@ -790,7 +742,6 @@ def render_management_html_table(df):
 def run_management_app():
     st.subheader("📊 Quản lý Thời hạn Mã Quang Trắc")
 
-    # XỬ LÝ BỎ QUA CÔNG VIỆC BẰNG QUERY PARAMS
     query_params = st.query_params
     if "ignore_job_id" in query_params:
         job_id_to_ignore = query_params["ignore_job_id"]
@@ -825,7 +776,6 @@ def run_management_app():
     if not df_raw.empty:
         df_filtered = df_raw.copy()
 
-        # Lọc bỏ công việc đã bấm "Bỏ qua"
         ignored_jobs = load_ignored_jobs()
         if ignored_jobs and 'id' in df_filtered.columns:
             df_filtered = df_filtered[~df_filtered['id'].astype(str).isin(ignored_jobs)].copy()
@@ -839,7 +789,7 @@ def run_management_app():
                 ~df_filtered['Công việc'].astype(str).str.strip().str.lower().str.startswith('năng lượng')
             ].copy()
 
-        # BỘ LỌC DỮ LIỆU CỰC NHANH
+        # BỘ LỌC TẬN DỤNG DỮ LIỆU ĐÃ LƯU TRÊN RAM (TỐC ĐỘ TỨC THÌ)
         with st.container():
             col1, col2, col3, col4, col5, col6 = st.columns(6)
 
@@ -904,18 +854,6 @@ def run_management_app():
                 df_filtered['ĐVT'].astype(str).str.strip().ne('') & 
                 df_filtered['ĐVT'].astype(str).str.strip().ne('False')
             ].copy()
-
-        # TẠO CỘT NHÓM MÃ VÀ SẮP XẾP CHUẨN XÁC THEO HẠN TĂNG DẦN
-        if 'Mã quang trắc' in df_filtered.columns:
-            df_filtered['_group_code'] = df_filtered['Mã quang trắc'].astype(str).str.split('.').str[0].str.strip()
-        else:
-            df_filtered['_group_code'] = df_filtered.index.astype(str)
-
-        df_filtered = df_filtered.sort_values(
-            by=['deadline_dt', '_group_code', 'id'], 
-            ascending=[True, True, True], 
-            na_position='last'
-        ).reset_index(drop=True)
 
         today_date = date.today()
         def update_status_circle(row):
