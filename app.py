@@ -17,9 +17,6 @@ st.set_page_config(
     page_icon="🔬"
 )
 
-# -------------------------------------------------------------------
-# LƯU TRỮ DỮ LIỆU HẸN LẠI & CÔNG VIỆC BỎ QUA (INTERNAL STORE)
-# -------------------------------------------------------------------
 RESCHEDULE_FILE = "reschedule_data.json"
 IGNORED_JOBS_FILE = "ignored_jobs.json"
 
@@ -85,7 +82,6 @@ def save_ignored_job(job_id):
         with open(IGNORED_JOBS_FILE, "w", encoding="utf-8") as f:
             json.dump(ignored, f, ensure_ascii=False, indent=2)
 
-# Chống Google Translate làm thay đổi cấu trúc dữ liệu
 components.html(
     """
     <script>
@@ -106,7 +102,7 @@ components.html(
 )
 
 # -------------------------------------------------------------------
-# CẤU HÌNH CHUNG KẾT NỐI ODOO & CACHE THÔNG TIN HỆ THỐNG
+# CẤU HÌNH CHUNG KẾT NỐI ODOO
 # -------------------------------------------------------------------
 ODOO_URL = "https://erp.quatest3.com.vn"
 ODOO_DB = "QUATEST3_18"
@@ -219,7 +215,7 @@ def extract_sample_value(row, active_sample_fields):
 
 
 # ===================================================================
-# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC
+# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC (GIỮ NGUYÊN 100% CODE CŨ)
 # ===================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_lookup_data_from_odoo(query_str):
@@ -437,7 +433,7 @@ def run_lookup_app():
 
 
 # ===================================================================
-# 3. CHỨC NĂNG 2: QUẢN LÝ (LẤY MẪU CHUẨN + GIỮ NGUYÊN BẢNG HTML)
+# 3. CHỨC NĂNG 2: QUẢN LÝ (TỐI ƯU TỐC ĐỘ + HTML CHUẨN KÍCH THƯỚC)
 # ===================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_management_data_from_odoo():
@@ -464,7 +460,6 @@ def fetch_management_data_from_odoo():
                 elif k == 'testing_method_id' and 'test_method_id' in valid_odoo_fields:
                     actual_fields_map['test_method_id'] = v
 
-            # SỬA LỖI LẤY MẪU: Dùng danh sách trường giống hệt Tra cứu
             active_sample_fields = [sf for sf in LOOKUP_SAMPLE_FIELDS if sf in valid_odoo_fields]
             for sf in active_sample_fields:
                 actual_fields_map[sf] = sf
@@ -666,7 +661,7 @@ def fetch_management_data_from_odoo():
                                     
                                     if 'kjeldahl' in r_method and r_code in codes_with_completed_dumas:
                                         return False
-                                    if 'dumas' in r_method and r_code in codes_with_completed_dumas:
+                                    if 'dumas' in r_method and r_code in codes_with_completed_kjeldahl:
                                         return False
                                     return True
                                 
@@ -727,7 +722,7 @@ def render_management_html_table(df, reschedule_info):
     html_lines.append('  .top-border-sub { border-top: 1.5px solid #718096 !important; }')
     html_lines.append('  .bg-group-0 { background-color: #FFFFFF !important; }')
     html_lines.append('  .bg-group-1 { background-color: #EDF2F7 !important; }')
-    html_lines.append('  .btn-ignore { background-color: #FFF; border: 1px solid #E2E8F0; border-radius: 6px; padding: 4px 8px; cursor: pointer; color: #E53E3E; font-weight: bold; font-size: 13px; }')
+    html_lines.append('  .btn-ignore { background-color: #FFF; border: 1px solid #CBD5E0; border-radius: 6px; padding: 6px 10px; cursor: pointer; color: #E53E3E; font-weight: bold; font-size: 13px; }')
     html_lines.append('  .btn-ignore:hover { background-color: #FED7D7; }')
     
     html_lines.append('''
@@ -880,7 +875,8 @@ def render_management_html_table(df, reschedule_info):
                         html_lines.append(f'<td class="{bg_class}{top_border_cls}">{val}</td>')
 
                 top_border_cls = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if (r == curr and curr > i) else '')
-                btn_html = f'<button class="btn-ignore" onclick="if(confirm(\'Có muốn bỏ qua công việc này?\')) {{ window.parent.postMessage({{type: \'IGNORE_JOB\', id: \'{job_id}\'}}, \'*\'); }}">🚫 Bỏ qua</button>'
+                btn_url = f"?ignore_job_id={job_id}"
+                btn_html = f'<a href="{btn_url}" target="_self" onclick="return confirm(\'Có muốn bỏ qua công việc này?\');" style="text-decoration:none;"><button class="btn-ignore">🚫 Bỏ qua</button></a>'
                 html_lines.append(f'<td class="{bg_class}{top_border_cls}" style="text-align: center;">{btn_html}</td>')
 
                 html_lines.append('</tr>')
@@ -895,36 +891,12 @@ def render_management_html_table(df, reschedule_info):
 def run_management_app():
     st.subheader("📊 Quản lý Thời hạn Mã Quang Trắc")
 
-    # BẮT SỰ KIỆN XÁC NHẬN BỎ QUA TỪ BẢNG HTML/JS
-    components.html(
-        """
-        <script>
-            window.addEventListener("message", (event) => {
-                if (event.data && event.data.type === "IGNORE_JOB") {
-                    const jobId = event.data.id;
-                    const mainDoc = window.parent.document;
-                    let input = mainDoc.getElementById("ignored_job_trigger_input");
-                    if (!input) {
-                        input = mainDoc.createElement("input");
-                        input.id = "ignored_job_trigger_input";
-                        input.type = "hidden";
-                        mainDoc.body.appendChild(input);
-                    }
-                    input.value = jobId;
-                    input.dispatchEvent(new Event("change", { bubbles: true }));
-                }
-            });
-        </script>
-        """,
-        height=0,
-        width=0
-    )
-
-    # Nút ẩn xử lý việc lưu công việc bỏ qua
-    job_to_ignore = st.text_input("", key="ignored_job_id_input", label_visibility="collapsed")
-    if job_to_ignore:
-        save_ignored_job(job_to_ignore)
-        st.session_state["ignored_job_id_input"] = ""
+    # XỬ LÝ BỎ QUA CÔNG VIỆC BẰNG QUERY PARAMS (KHÔNG CẦN Ô TÌM KIẾM NGẦM)
+    query_params = st.query_params
+    if "ignore_job_id" in query_params:
+        job_id_to_ignore = query_params["ignore_job_id"]
+        save_ignored_job(job_id_to_ignore)
+        st.query_params.clear()
         st.rerun()
 
     res_data = load_reschedule_data()
