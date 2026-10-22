@@ -1064,7 +1064,7 @@ def run_management_app():
 
         df_filtered['Trạng thái hạn'] = df_filtered.apply(update_status_circle, axis=1)
 
-       # THANH CÔNG CỤ XUẤT / IN PHIẾU TỔNG HỢP
+      # THANH CÔNG CỤ XUẤT / IN PHIẾU TỔNG HỢP
     col_summary_btn, _ = st.columns([3, 9])
     with col_summary_btn:
         show_print_view = st.checkbox("📄 Hiển thị Phiếu tổng hợp để in", value=False)
@@ -1073,50 +1073,18 @@ def run_management_app():
         st.markdown("---")
         summary_html = generate_summary_print_table(df_filtered)
         if summary_html:
-            # 1. TIÊM CSS IN VÀO HEAD CỦA TRANG + NÚT IN
+            # 1. NÚT IN AN TOÀN ĐẶT PHÍA TRÊN
             components.html(
                 """
-                <script>
-                    const parentDoc = window.parent.document;
-                    let styleTag = parentDoc.getElementById('print-summary-style');
-                    if (!styleTag) {
-                        styleTag = parentDoc.createElement('style');
-                        styleTag.id = 'print-summary-style';
-                        styleTag.innerHTML = `
-                            .summary-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif; font-size: 13px; table-layout: fixed; }
-                            .summary-table th, .summary-table td { border: 1px solid #1A202C; padding: 6px 10px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }
-                            .summary-table th { background-color: #EDF2F7; font-weight: bold; }
-                            .summary-table tr:nth-child(even) { background-color: #F8FAFC; }
-
-                            @media print {
-                                @page { size: A4 portrait; margin: 10mm; }
-                                body * { visibility: hidden !important; }
-                                #print-area-summary, #print-area-summary * { visibility: visible !important; }
-                                #print-area-summary { 
-                                    position: absolute !important; 
-                                    left: 0 !important; 
-                                    top: 0 !important; 
-                                    width: 100% !important; 
-                                    margin: 0 !important; 
-                                    padding: 0 !important; 
-                                }
-                                .summary-table { page-break-inside: auto; }
-                                .summary-table tr { page-break-inside: avoid; page-break-after: auto; }
-                            }
-                        `;
-                        parentDoc.head.appendChild(styleTag);
-                    }
-                </script>
-                <div style="margin-bottom: 10px;">
-                    <button onclick="window.parent.print()" style="background-color: #2563EB; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;">
+                <div style="margin-bottom: 8px;">
+                    <button onclick="window.parent.print()" style="background-color: #2563EB; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer;">
                         🖨️ In / Xuất PDF Phiếu Tổng Hợp
                     </button>
                 </div>
                 """,
-                height=55
+                height=50
             )
-
-            # 2. HIỂN THỊ BẢNG PHIẾU TỔNG HỢP
+            # 2. BẢNG PHIẾU TỔNG HỢP
             st.markdown(summary_html, unsafe_allow_html=True)
         else:
             st.warning("Không có dữ liệu để tạo phiếu tổng hợp.")
