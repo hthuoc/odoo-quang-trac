@@ -738,25 +738,30 @@ def get_short_work_name(work_str, method_str=""):
     w_lower = w.lower()
     m_str = str(method_str).strip()
 
+    # 1. BỎ QUA không hiển thị
     if 'nitơ axit amin so với' in w_lower or 'nito axit amin so voi' in w_lower:
         return None
     if 'nitơ amoniac so với' in w_lower or 'nito amoniac so voi' in w_lower:
         return None
 
+    # 2. Phương pháp AOAC -> Ghi gọn là 'ab' như acid béo
     if 'aoac' in m_str.lower() and ('996.06' in m_str.lower() or 'acid béo' in w_lower or 'axit béo' in w_lower):
         return 'ab'
 
+    # 3. Protein -> LUÔN LUÔN ghi đuôi Testing method
     if 'protein' in w_lower or 'đạm' in w_lower:
         m_short = get_short_method_name(m_str)
         return f"Pro{m_short}"
 
-   if 'carbohydrate không bao gồm' in w_lower or 'carbohydrat không bao gồm' in w_lower:
+    # 4. Carbohydrat
+    if 'carbohydrate không bao gồm' in w_lower or 'carbohydrat không bao gồm' in w_lower:
         return 'Carbo'
     elif re.search(r'carbohydrat[e]?\s*[\(\[\{].*[\*\∗\⁽\*\⁾].*[\)\]\}]', w_lower) or 'carbohydrat (*)' in w_lower or 'carbohydrate (*)' in w_lower:
         return 'Carbo(*)'
     elif 'carbohydrate' in w_lower or 'carbohydrat' in w_lower:
         return 'Carbo'
 
+    # 5. Chất béo
     if 'hàm lượng chất béo' in w_lower or 'chất béo' in w_lower:
         if 'bão hòa' in w_lower:
             return 'BeoBH'
@@ -773,6 +778,7 @@ def get_short_work_name(work_str, method_str=""):
         else:
             return 'Beo'
 
+    # 6. Đường
     if 'đường tổng số' in w_lower:
         return 'TongSK'
     elif 'đường tổng' in w_lower:
@@ -784,6 +790,7 @@ def get_short_work_name(work_str, method_str=""):
     elif 'lactose monohydrate' in w_lower:
         return 'lacmono'
 
+    # 7. Xơ & Tinh bột
     if 'xơ tổng số (tdf)' in w_lower or 'tdf' in w_lower:
         return 'TDF'
     elif 'xơ tiêu hóa' in w_lower:
@@ -793,6 +800,7 @@ def get_short_work_name(work_str, method_str=""):
     elif 'tinh bột' in w_lower:
         return 'tb'
 
+    # 8. Nitơ
     if 'nito amoniac' in w_lower or 'nitơ amoniac' in w_lower or 'nh3' in w_lower:
         return 'NH3'
     elif 'nitơ amin amoniac' in w_lower or 'nitơ formon' in w_lower or 'nito formon' in w_lower:
@@ -802,6 +810,7 @@ def get_short_work_name(work_str, method_str=""):
     elif 'nito tổng' in w_lower or 'nitơ tổng' in w_lower:
         return 'Nito'
 
+    # 9. Vi chất & Khác
     if 'docosahexaenoic acid' in w_lower or 'dha' in w_lower:
         return 'DHA'
     elif 'omega 3' in w_lower or 'omg 3' in w_lower or 'α-linolenic acid' in w_lower:
@@ -821,6 +830,7 @@ def get_short_work_name(work_str, method_str=""):
     elif 'tro' in w_lower:
         return 'Tro'
 
+    # 10. Các hàm lượng đường có Testing method QUATEST3 1222:2024
     if 'quatest3 1222:2024' in m_str.lower() or 'aoac 2018.16' in m_str.lower():
         cleaned = re.sub(r'^(hàm lượng|ham luong)\s*', '', w, flags=re.IGNORECASE)
         return cleaned.strip().capitalize()
