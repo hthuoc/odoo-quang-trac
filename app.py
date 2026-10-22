@@ -721,7 +721,6 @@ def get_short_method_name(method_str):
     elif 'enzym' in m or 'enzyme' in m:
         return 'Enzym'
     else:
-        # Nếu là mã tiêu chuẩn (ví dụ: QTTN 136:2016 -> 136:2016, TCVN 4326:2001 -> 4326:2001)
         code_match = re.search(r'(\d+:\d{4})', str(method_str))
         if code_match:
             return code_match.group(1)
@@ -739,28 +738,23 @@ def get_short_work_name(work_str, method_str=""):
     w_lower = w.lower()
     m_str = str(method_str).strip()
 
-    # 1. BỎ QUA không hiển thị
     if 'nitơ axit amin so với' in w_lower or 'nito axit amin so voi' in w_lower:
         return None
     if 'nitơ amoniac so với' in w_lower or 'nito amoniac so voi' in w_lower:
         return None
 
-    # 2. Phương pháp AOAC -> Ghi gọn là 'ab' như acid béo
     if 'aoac' in m_str.lower() and ('996.06' in m_str.lower() or 'acid béo' in w_lower or 'axit béo' in w_lower):
         return 'ab'
 
-    # 3. Protein -> LUÔN LUÔN ghi đuôi Testing method
     if 'protein' in w_lower or 'đạm' in w_lower:
         m_short = get_short_method_name(m_str)
         return f"Pro{m_short}"
 
-    # 4. Carbohydrat không bao gồm chất xơ / xơ
     if 'carbohydrate không bao gồm' in w_lower or 'carbohydrat không bao gồm' in w_lower:
         return 'Carbo'
     elif 'carbohydrat (*)' in w_lower or 'carbohydrate (*)' in w_lower or 'carbohydrat ⁽*⁾' in w_lower:
         return 'Carbo(*)'
 
-    # 5. Chất béo
     if 'hàm lượng chất béo' in w_lower or 'chất béo' in w_lower:
         if 'bão hòa' in w_lower:
             return 'BeoBH'
@@ -777,7 +771,6 @@ def get_short_work_name(work_str, method_str=""):
         else:
             return 'Beo'
 
-    # 6. Đường
     if 'đường tổng số' in w_lower:
         return 'TongSK'
     elif 'đường tổng' in w_lower:
@@ -789,7 +782,6 @@ def get_short_work_name(work_str, method_str=""):
     elif 'lactose monohydrate' in w_lower:
         return 'lacmono'
 
-    # 7. Xơ & Tinh bột
     if 'xơ tổng số (tdf)' in w_lower or 'tdf' in w_lower:
         return 'TDF'
     elif 'xơ tiêu hóa' in w_lower:
@@ -799,7 +791,6 @@ def get_short_work_name(work_str, method_str=""):
     elif 'tinh bột' in w_lower:
         return 'tb'
 
-    # 8. Nitơ
     if 'nito amoniac' in w_lower or 'nitơ amoniac' in w_lower or 'nh3' in w_lower:
         return 'NH3'
     elif 'nitơ amin amoniac' in w_lower or 'nitơ formon' in w_lower or 'nito formon' in w_lower:
@@ -809,7 +800,6 @@ def get_short_work_name(work_str, method_str=""):
     elif 'nito tổng' in w_lower or 'nitơ tổng' in w_lower:
         return 'Nito'
 
-    # 9. Vi chất & Khác
     if 'docosahexaenoic acid' in w_lower or 'dha' in w_lower:
         return 'DHA'
     elif 'omega 3' in w_lower or 'omg 3' in w_lower or 'α-linolenic acid' in w_lower:
@@ -829,17 +819,15 @@ def get_short_work_name(work_str, method_str=""):
     elif 'tro' in w_lower:
         return 'Tro'
 
-    # 10. Các hàm lượng đường có Testing method QUATEST3 1222:2024
     if 'quatest3 1222:2024' in m_str.lower() or 'aoac 2018.16' in m_str.lower():
         cleaned = re.sub(r'^(hàm lượng|ham luong)\s*', '', w, flags=re.IGNORECASE)
         return cleaned.strip().capitalize()
 
-    # Mặc định loại bỏ chữ "Hàm lượng"
     cleaned = re.sub(r'^(hàm lượng|ham luong)\s*', '', w, flags=re.IGNORECASE)
     return cleaned.strip()
 
 def generate_summary_print_table(df_filtered):
-    """Trích xuất bảng dữ liệu Mã quang trắc - Công việc rút gọn"""
+    """Trích xuất bảng dữ liệu Mã quang trắc - Công việc rút gọn chuẩn in A4"""
     if df_filtered.empty or 'Mã quang trắc' not in df_filtered.columns:
         return ""
 
@@ -848,8 +836,6 @@ def generate_summary_print_table(df_filtered):
 
     for code, group in grouped:
         works_in_code = []
-        
-        # Đếm tần suất các tên rút gọn trong cùng 1 mã để xử lý trùng
         short_names_count = {}
         row_short_map = []
 
@@ -866,11 +852,9 @@ def generate_summary_print_table(df_filtered):
             row_short_map.append((s_name, m_name))
 
         for s_name, m_name in row_short_map:
-            # Nếu trùng tên Độ ẩm (Am) trong cùng mã -> Ghép thêm đuôi mã số dính liền với :
             if s_name == 'Am' and short_names_count.get('Am', 0) > 1:
                 m_short = get_short_method_name(m_name)
                 final_work_str = f"Am{m_short}"
-            # Nếu các tên khác trùng nhau mà chưa ghép đuôi
             elif short_names_count.get(s_name, 0) > 1 and not any(s_name.startswith(p) for p in ['Pro', 'Am', 'ab']):
                 m_short = get_short_method_name(m_name)
                 final_work_str = f"{s_name}{m_short}"
@@ -882,7 +866,6 @@ def generate_summary_print_table(df_filtered):
         if not works_in_code:
             continue
 
-        # Giữ thứ tự và loại bỏ trùng lặp công việc
         combined_works = ", ".join(dict.fromkeys(works_in_code))
         sample_name = group.iloc[0].get('Mẫu', '')
         
@@ -899,25 +882,28 @@ def generate_summary_print_table(df_filtered):
 
     html_lines = []
     html_lines.append('<div id="print-area">')
+    
+    # CSS tối ưu chuẩn khổ in A4 (Dùng visibility để hiển thị duy nhất khu vực #print-area)
     html_lines.append('<style>')
-    html_lines.append('  .summary-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif; font-size: 14px; }')
-    html_lines.append('  .summary-table th, .summary-table td { border: 1px solid #1A202C; padding: 8px 12px; text-align: left; }')
+    html_lines.append('  .summary-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif; font-size: 13px; table-layout: fixed; }')
+    html_lines.append('  .summary-table th, .summary-table td { border: 1px solid #1A202C; padding: 6px 10px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }')
     html_lines.append('  .summary-table th { background-color: #EDF2F7; font-weight: bold; }')
     html_lines.append('  .summary-table tr:nth-child(even) { background-color: #F8FAFC; }')
     html_lines.append('  @media print {')
-    html_lines.append('      body * { visibility: hidden; }')
-    html_lines.append('      #print-area, #print-area * { visibility: visible; }')
-    html_lines.append('      #print-area { position: absolute; left: 0; top: 0; width: 100%; }')
-    html_lines.append('      .no-print { display: none !important; }')
+    html_lines.append('      @page { size: A4 portrait; margin: 10mm; }')
+    html_lines.append('      body * { visibility: hidden !important; }')
+    html_lines.append('      #print-area, #print-area * { visibility: visible !important; }')
+    html_lines.append('      #print-area { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }')
+    html_lines.append('      .no-print-btn { display: none !important; }')
     html_lines.append('  }')
     html_lines.append('</style>')
 
-    html_lines.append('<h4>📋 PHIẾU TỔNG HỢP MÃ QUANG TRẮC & CÔNG VIỆC RÚT GỌN</h4>')
+    html_lines.append('<h4 style="margin-top:0; padding-top:0; font-family: sans-serif;">📋 PHIẾU TỔNG HỢP MÃ QUANG TRẮC & CÔNG VIỆC RÚT GỌN</h4>')
     html_lines.append('<table class="summary-table"><thead><tr>')
-    html_lines.append('<th style="width: 50px; text-align: center;">STT</th>')
-    html_lines.append('<th style="width: 180px;">Mã quang trắc</th>')
+    html_lines.append('<th style="width: 45px; text-align: center;">STT</th>')
+    html_lines.append('<th style="width: 160px;">Mã quang trắc</th>')
     html_lines.append('<th>Mẫu</th>')
-    html_lines.append('<th>Công việc rút gọn</th>')
+    html_lines.append('<th style="width: 150px;">Công việc rút gọn</th>')
     html_lines.append('</tr></thead><tbody>')
 
     for idx, row in df_summary.iterrows():
@@ -1092,15 +1078,19 @@ def run_management_app():
             st.markdown("---")
             summary_html = generate_summary_print_table(df_filtered)
             if summary_html:
-                st.markdown(summary_html, unsafe_allow_html=True)
+                # 1. ĐẶT NÚT IN NẰM TRÊN ĐẦU BẢNG (Dùng window.parent.print())
                 components.html(
                     """
-                    <button onclick="window.print()" style="background-color: #2563EB; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px;">
-                        🖨️ In / Xuất PDF Phiếu Tổng Hợp
-                    </button>
+                    <div style="margin-bottom: 10px;" class="no-print-btn">
+                        <button onclick="window.parent.print()" style="background-color: #2563EB; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer;">
+                            🖨️ In / Xuất PDF Phiếu Tổng Hợp
+                        </button>
+                    </div>
                     """,
-                    height=60
+                    height=55
                 )
+                # 2. HIỂN THỊ BẢNG BÊN DƯỚI NÚT IN
+                st.markdown(summary_html, unsafe_allow_html=True)
             else:
                 st.warning("Không có dữ liệu để tạo phiếu tổng hợp.")
             st.markdown("---")
