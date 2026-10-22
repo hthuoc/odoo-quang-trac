@@ -808,16 +808,7 @@ def get_short_work_name(work_str, method_str=""):
     elif 'nito tổng' in w_lower or 'nitơ tổng' in w_lower:
         return 'Nito'
 
-    # 9. Vi chất & Khác
-    if 'docosahexaenoic acid' in w_lower or 'dha' in w_lower:
-        return 'DHA'
-    elif 'omega 3' in w_lower or 'omg 3' in w_lower or 'α-linolenic acid' in w_lower:
-        return 'Omg3'
-    elif 'omega 6' in w_lower or 'omg 6' in w_lower:
-        return 'Omg6'
-    elif 'omega 9' in w_lower or 'omg 9' in w_lower:
-        return 'Omg9'
-    elif 'axit hydrocyanic' in w_lower or 'hcn' in w_lower:
+    if 'axit hydrocyanic' in w_lower or 'hcn' in w_lower:
         return 'HCN'
     elif 'độ ẩm vắt' in w_lower or 'ẩm vắt' in w_lower:
         return 'AmVat'
