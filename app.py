@@ -140,29 +140,22 @@ def extract_sample_value(row, active_sample_fields):
 
 
 # ===================================================================
-# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC (BỘ CODE 1)
+# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC
 # ===================================================================
 def fetch_lookup_data_from_odoo(query_str):
     if not query_str.strip():
         return pd.DataFrame()
     
     max_retries = 3
+    valid_ids = get_odoo_user_and_partner_ids()
+    valid_odoo_fields = get_assign_work_line_fields()
+
     for attempt in range(max_retries):
         try:
-            ctx = ssl._create_unverified_context()  # Tạo ngữ cảnh bỏ qua kiểm tra chứng chỉ (Create context to bypass certificate verification)
+            ctx = ssl._create_unverified_context()
             common = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/common', allow_none=True, context=ctx)
             uid = common.authenticate(ODOO_DB, ODOO_USER, ODOO_PASSWORD, {})
             models = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/object', allow_none=True, context=ctx)
-
-            user_ids = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'res.users', 'search', [[['name', 'ilike', 'N Văn Phương']]])
-            partner_ids = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'res.partner', 'search', [[['name', 'ilike', 'N Văn Phương']]])
-            valid_ids = set(user_ids + partner_ids)
-
-            existing_fields_info = models.execute_kw(
-                ODOO_DB, uid, ODOO_PASSWORD,
-                'assign.work.line', 'fields_get', [], {'attributes': ['string']}
-            )
-            valid_odoo_fields = set(existing_fields_info.keys())
 
             actual_fields_map = {}
             for k, v in FIELDS_MAP.items():
@@ -173,12 +166,15 @@ def fetch_lookup_data_from_odoo(query_str):
                 elif k == 'testing_method_id' and 'test_method_id' in valid_odoo_fields:
                     actual_fields_map['test_method_id'] = v
 
+            active_sample_fields = [sf for sf in LOOKUP_SAMPLE_FIELDS if sf in valid_odoo_fields]
+            for sf in active_sample_fields:
+                actual_fields_map[sf] = sf
+
             if 'state' in valid_odoo_fields:
                 actual_fields_map['state'] = 'Trạng thái'
 
             code_field_list = [k for k, v in actual_fields_map.items() if v == 'Mã quang trắc']
             if not code_field_list:
-                st.error("Chưa cấu hình đúng tên kỹ thuật cho 'Mã quang trắc' trong FIELDS_MAP.")
                 return pd.DataFrame()
 
             search_field = code_field_list[0]
@@ -230,8 +226,11 @@ def fetch_lookup_data_from_odoo(query_str):
             if df.empty:
                 return pd.DataFrame()
 
+            df['Mẫu'] = df.apply(lambda r: extract_sample_value(r, active_sample_fields), axis=1)
+
             for col in df.columns:
-                df[col] = df[col].apply(clean_odoo_field_value)
+                if col != 'Mẫu':
+                    df[col] = df[col].apply(clean_odoo_field_value)
 
             state_col = [k for k, v in actual_fields_map.items() if v == 'Trạng thái']
             if state_col and state_col[0] in df.columns:
@@ -249,19 +248,18 @@ def fetch_lookup_data_from_odoo(query_str):
                 df = df.sort_values(by=sort_cols, key=lambda col: col.astype(str)).reset_index(drop=True)
 
             return df
-        except Exception as e:
+        except Exception:
             if attempt < max_retries - 1:
-                time_lib.sleep(2)
+                time_lib.sleep(1)
                 continue
             else:
-                st.error(f"Lỗi kết nối hoặc truy vấn Odoo: {e}")
                 return pd.DataFrame()
 
 def render_lookup_html_table(df):
     if df.empty:
         return ""
 
-    cols_order = ['Ngày phân công', 'Thời hạn', 'Mã quang trắc', 'Công việc', 'Testing method', 'ĐVT', 'Ghi chú', 'Kết quả', 'Trạng thái']
+    cols_order = ['Ngày phân công', 'Thời hạn', 'Mẫu', 'Mã quang trắc', 'Công việc', 'Testing method', 'ĐVT', 'Ghi chú', 'Kết quả', 'Trạng thái']
     existing_cols = [c for c in cols_order if c in df.columns]
     df = df[existing_cols].fillna('')
 
@@ -270,10 +268,23 @@ def render_lookup_html_table(df):
     else:
         df['_base_code'] = ''
 
+    col_widths = {
+        'Ngày phân công': '100px',
+        'Thời hạn': '100px',
+        'Mẫu': '180px',
+        'Mã quang trắc': '160px',
+        'Công việc': '230px',
+        'Testing method': '200px',
+        'ĐVT': '85px',
+        'Ghi chú': '110px',
+        'Kết quả': '100px',
+        'Trạng thái': '110px'
+    }
+
     html_lines = []
     html_lines.append('<style>')
-    html_lines.append('  .custom-table-lookup { width: 100%; border-collapse: collapse; margin-top: 15px; font-family: sans-serif; font-size: 14px; }')
-    html_lines.append('  .custom-table-lookup th, .custom-table-lookup td { border: 1px solid #D3D3D3; padding: 8px 12px; text-align: left; vertical-align: middle; }')
+    html_lines.append('  .custom-table-lookup { width: 100%; border-collapse: collapse; margin-top: 15px; font-family: sans-serif; font-size: 14px; table-layout: fixed; }')
+    html_lines.append('  .custom-table-lookup th, .custom-table-lookup td { border: 1px solid #D3D3D3; padding: 8px 12px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }')
     html_lines.append('  .custom-table-lookup th { background-color: #F0F2F6; color: #1F2937; font-weight: bold; }')
     html_lines.append('  .custom-table-lookup tr:nth-child(even) { background-color: #FAFAFA; }')
     html_lines.append('  .code-group-border { border-bottom: 3px solid #000000 !important; }')
@@ -281,10 +292,12 @@ def render_lookup_html_table(df):
 
     html_lines.append('<table class="custom-table-lookup"><thead><tr>')
     for col in existing_cols:
-        html_lines.append(f'<th>{col}</th>')
+        width_style = f' style="width: {col_widths.get(col, "auto")};"'
+        html_lines.append(f'<th{width_style}>{col}</th>')
     html_lines.append('</tr></thead><tbody>')
 
     main_merge_cols = [c for c in ['Ngày phân công', 'Thời hạn'] if c in existing_cols]
+    code_merge_cols = [c for c in ['Mẫu', 'Mã quang trắc'] if c in existing_cols]
 
     n = len(df)
     i = 0
@@ -304,6 +317,7 @@ def render_lookup_html_table(df):
             for r in range(sub_i, sub_j):
                 html_lines.append('<tr>')
                 is_last_row_of_code = (r == sub_j - 1)
+                border_class = ' class="code-group-border"' if is_last_row_of_code else ''
 
                 for col in existing_cols:
                     val = str(df.iloc[r][col])
@@ -311,11 +325,10 @@ def render_lookup_html_table(df):
                     if col in main_merge_cols:
                         if r == i:
                             html_lines.append(f'<td rowspan="{base_rowspan}">{val}</td>')
-                    elif col == 'Mã quang trắc':
+                    elif col in code_merge_cols:
                         if r == sub_i:
-                            html_lines.append(f'<td rowspan="{code_rowspan}" class="code-group-border">{val}</td>')
+                            html_lines.append(f'<td rowspan="{code_rowspan}"{border_class}>{val}</td>')
                     else:
-                        border_class = ' class="code-group-border"' if is_last_row_of_code else ''
                         html_lines.append(f'<td{border_class}>{val}</td>')
                 html_lines.append('</tr>')
 
@@ -326,22 +339,31 @@ def render_lookup_html_table(df):
     return "".join(html_lines)
 
 def run_lookup_app():
-    st.subheader("🔍 Tra cứu thông tin Quang Trắc")
-    search_query = st.text_input("Nhập số mã quang cần tìm (nhấn Enter để tìm kiếm):")
+    st.subheader("🔍 Tra cứu Mã Quang Trắc")
+    
+    col_input, col_btn = st.columns([4, 1])
+    with col_input:
+        query_code = st.text_input("Nhập Mã quang trắc cần tra cứu:", placeholder="Ví dụ: TPTN2602", label_visibility="collapsed")
+    with col_btn:
+        search_pressed = st.button("Tra cứu", use_container_width=True, type="primary")
 
-    if search_query.strip():
-        with st.spinner("Đang tìm kiếm..."):
-            df_result = fetch_lookup_data_from_odoo(search_query)
-        
-        if not df_result.empty:
-            html_table = render_lookup_html_table(df_result)
+    if search_pressed and query_code:
+        with st.spinner("Đang truy vấn dữ liệu từ Odoo..."):
+            df_lookup = fetch_lookup_data_from_odoo(query_code)
+            st.session_state['lookup_df'] = df_lookup
+            st.session_state['lookup_query'] = query_code
+
+    if 'lookup_df' in st.session_state and st.session_state.get('lookup_query'):
+        df_lookup = st.session_state['lookup_df']
+        if not df_lookup.empty:
+            st.success(f"Tìm thấy {len(df_lookup)} bản ghi cho từ khóa: **{st.session_state['lookup_query']}**")
+            html_lookup_table = render_lookup_html_table(df_lookup)
             st.markdown(
-                f'<div style="overflow-x: auto; width: 100%;" translate="no">{html_table}</div>', 
+                f'<div style="overflow-x: auto; width: 100%;" translate="no">{html_lookup_table}</div>', 
                 unsafe_allow_html=True
             )
         else:
-            st.info("Không tìm thấy dữ liệu phù hợp.")
-
+            st.warning(f"Không tìm thấy dữ liệu nào cho mã quang trắc: **{st.session_state['lookup_query']}**")
 
 
 # ===================================================================
@@ -710,7 +732,7 @@ def render_management_html_table(df):
 
 
 # ===================================================================
-# LOGIC RÚT GỌN CÔNG VIỆC CHUẨN
+# LOGIC RÚT GỌN CÔNG VIỆC CHUẨN THEO PHẢN HỒI MỚI NHẤT
 # ===================================================================
 def get_short_method_name(method_str):
     """Lấy ngắn gọn tên phương pháp thử nghiệm"""
@@ -755,7 +777,7 @@ def get_short_work_name(work_str, method_str=""):
         return f"Pro{m_short}"
 
     # 4. Carbohydrat
-    if 'carbohydrate không bao gồm' in w_lower or 'carbohydrat không bao gồm' in w_lower:
+    if 'carbohydrate không bao gồm' in w_lower or 'carbohydrat tidak bao gồm' in w_lower or 'carbohydrat không bao gồm' in w_lower:
         return 'Carbo'
     elif 'carbohydrat' in w_lower or 'carbohydrate' in w_lower:
         if '(' in w or '⁽' in w or '[' in w or '{' in w:
@@ -763,7 +785,7 @@ def get_short_work_name(work_str, method_str=""):
         else:
             return 'Carbo'
             
-    # 5. Nhóm Chất béo, Axit béo, Omega
+    # 5. Nhóm Chất béo, Axit béo, Omega (Ưu tiên AOAC 996.06 và các loại béo đặc thù)
     if '996.06' in m_str.lower() or any(k in w_lower for k in ['chất béo', 'béo', 'axit béo', 'acid béo', 'omega', 'omg']):
         if 'bão hòa đơn' in w_lower or 'mufa' in w_lower:
             return 'MUFA'
@@ -845,7 +867,7 @@ def get_short_work_name(work_str, method_str=""):
     return cleaned.strip()
 
 def generate_summary_print_table(df_filtered):
-    """Trích xuất bảng dữ liệu Mã quang trắc - Công việc rút gọn chuẩn in A4 ngang"""
+    """Trích xuất bảng dữ liệu Mã quang trắc - Công việc rút gọn chuẩn in A4"""
     if df_filtered.empty or 'Mã quang trắc' not in df_filtered.columns:
         return ""
 
@@ -906,6 +928,7 @@ def generate_summary_print_table(df_filtered):
     html_lines.append('  .summary-table tr:nth-child(even) { background-color: #F8FAFC; }')
     html_lines.append('</style>')
 
+    # ĐIỀU CHỈNH ĐỘ RỘNG CỘT & ĐỔI TÊN TIÊU ĐỀ THÀNH "Công việc"
     html_lines.append('<table id="table-to-print" class="summary-table"><thead><tr>')
     html_lines.append('<th style="width: 50px; text-align: center;">STT</th>')
     html_lines.append('<th style="width: 160px;">Mã quang trắc</th>')
@@ -940,7 +963,8 @@ def run_management_app():
     if "ignore_job_id" in query_params:
         job_id_to_ignore = query_params["ignore_job_id"]
         save_ignored_job(job_id_to_ignore)
-        st.query_params.clear()
+        if "ignore_job_id" in st.query_params:
+            del st.query_params["ignore_job_id"]
         st.rerun()
 
     st.markdown("""
@@ -986,6 +1010,7 @@ def run_management_app():
                 ~df_filtered['Công việc'].astype(str).str.strip().str.lower().str.startswith('năng lượng')
             ].copy()
 
+        # BỘ LỌC CỰC NHANH TRÊN MEMORY RAM
         with st.container():
             col1, col2, col3, col4, col5, col6 = st.columns(6)
 
@@ -1074,6 +1099,7 @@ def run_management_app():
 
         df_filtered['Trạng thái hạn'] = df_filtered.apply(update_status_circle, axis=1)
 
+        # THANH CÔNG CỤ XUẤT / IN PHIẾU TỔNG HỢP (ĐÃ CẬP NHẬT IN NGANG & TĂNG RỘNG CỘT CÔNG VIỆC)
         col_summary_btn, _ = st.columns([3, 9])
         with col_summary_btn:
             show_print_view = st.checkbox("📄 Hiển thị Phiếu tổng hợp để in", value=False)
@@ -1130,21 +1156,22 @@ def run_management_app():
 
 
 # ===================================================================
-# 4. ĐIỀU HƯỚNG VÀ GIAO DIỆN CHÍNH
+# 4. ĐIỀU HƯỚNG VÀ GIAO DIỆN CHÍNH (DÙNG URL QUERY PARAMS CHO NHIỀU TAB)
 # ===================================================================
-if 'app_mode' not in st.session_state:
-    st.session_state['app_mode'] = None
+query_params = st.query_params
+current_mode = query_params.get("mode", None)
 
-if st.session_state['app_mode'] is not None:
+if current_mode is not None:
     col_back, col_space = st.columns([2, 10])
     with col_back:
         if st.button("⬅️ Quay lại trang chủ", use_container_width=True):
-            st.session_state['app_mode'] = None
+            if "mode" in st.query_params:
+                del st.query_params["mode"]
             if 'mgmt_df_raw' in st.session_state:
                 del st.session_state['mgmt_df_raw']
             st.rerun()
 
-if st.session_state['app_mode'] is None:
+if current_mode is None:
     st.title("Hệ thống Quản lý & Tra cứu Mã Quang Trắc")
     st.write("Vui lòng chọn chức năng bạn muốn sử dụng:")
     st.markdown("---")
@@ -1155,18 +1182,18 @@ if st.session_state['app_mode'] is None:
         st.info("### 🔍 Tra cứu")
         st.write("Tìm kiếm công việc chi tiết theo từng **Mã quang trắc** cụ thể (Tra cứu toàn bộ thời gian).")
         if st.button("Truy cập Tra cứu", use_container_width=True, type="primary"):
-            st.session_state['app_mode'] = 'tracuu'
+            st.query_params["mode"] = "tracuu"
             st.rerun()
 
     with col_btn2:
         st.success("### 📊 Quản lý")
         st.write("Tổng hợp danh sách công việc theo **Thời hạn** từ 01/09/2026 trở đi.")
         if st.button("Truy cập Quản lý", use_container_width=True, type="primary"):
-            st.session_state['app_mode'] = 'quanly'
+            st.query_params["mode"] = "quanly"
             st.rerun()
 
-elif st.session_state['app_mode'] == 'tracuu':
+elif current_mode == 'tracuu':
     run_lookup_app()
 
-elif st.session_state['app_mode'] == 'quanly':
+elif current_mode == 'quanly':
     run_management_app()
