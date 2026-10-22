@@ -892,28 +892,28 @@ def generate_summary_print_table(df_filtered):
 
     df_summary = pd.DataFrame(summary_data)
 
-    html_lines = []
-    html_lines.append('<div id="print-area-summary">')
-    html_lines.append('<h3 style="margin-top:0; padding-top:0; font-family: sans-serif;">📋 PHIẾU TỔNG HỢP MÃ QUANG TRẮC & CÔNG VIỆC RÚT GỌN</h3>')
-    html_lines.append('<table class="summary-table"><thead><tr>')
-    html_lines.append('<th style="width: 45px; text-align: center;">STT</th>')
-    html_lines.append('<th style="width: 160px;">Mã quang trắc</th>')
-    html_lines.append('<th>Mẫu</th>')
-    html_lines.append('<th style="width: 150px;">Công việc rút gọn</th>')
-    html_lines.append('</tr></thead><tbody>')
+    # Dùng bảng HTML đơn giản, sạch sẽ
+    html_out = '<div id="summary-print-container">'
+    html_out += '<h3 style="margin-top:0; font-family: sans-serif;">📋 PHIẾU TỔNG HỢP MÃ QUANG TRẮC & CÔNG VIỆC RÚT GỌN</h3>'
+    html_out += '<table style="width:100%; border-collapse:collapse; font-size:13px; font-family:sans-serif;">'
+    html_out += '<thead><tr style="background-color:#EDF2F7;">'
+    html_out += '<th style="border:1px solid #1A202C; padding:6px; width:45px; text-align:center;">STT</th>'
+    html_out += '<th style="border:1px solid #1A202C; padding:6px; width:160px;">Mã quang trắc</th>'
+    html_out += '<th style="border:1px solid #1A202C; padding:6px;">Mẫu</th>'
+    html_out += '<th style="border:1px solid #1A202C; padding:6px; width:150px;">Công việc rút gọn</th>'
+    html_out += '</tr></thead><tbody>'
 
     for idx, row in df_summary.iterrows():
-        html_lines.append('<tr>')
-        html_lines.append(f'<td style="text-align: center;">{idx + 1}</td>')
-        html_lines.append(f'<td><b>{row["Mã quang trắc"]}</b></td>')
-        html_lines.append(f'<td>{row["Mẫu"]}</td>')
-        html_lines.append(f'<td><b>{row["Công việc (Rút gọn)"]}</b></td>')
-        html_lines.append('</tr>')
+        bg_color = '#F8FAFC' if idx % 2 == 1 else '#FFFFFF'
+        html_out += f'<tr style="background-color:{bg_color};">'
+        html_out += f'<td style="border:1px solid #1A202C; padding:6px; text-align:center;">{idx + 1}</td>'
+        html_out += f'<td style="border:1px solid #1A202C; padding:6px;"><b>{row["Mã quang trắc"]}</b></td>'
+        html_out += f'<td style="border:1px solid #1A202C; padding:6px;">{row["Mẫu"]}</td>'
+        html_out += f'<td style="border:1px solid #1A202C; padding:6px;"><b>{row["Công việc (Rút gọn)"]}</b></td>'
+        html_out += '</tr>'
 
-    html_lines.append('</tbody></table>')
-    html_lines.append('</div>')
-    
-    return "".join(html_lines)
+    html_out += '</tbody></table></div>'
+    return html_out
 
 def run_management_app():
     col_title, col_reload = st.columns([8, 2])
