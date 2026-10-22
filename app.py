@@ -338,23 +338,6 @@ def render_lookup_html_table(df):
     html_lines.append('</tbody></table>')
     return "".join(html_lines)
 
-def run_lookup_app():
-    st.subheader("🔍 Tra cứu thông tin Quang Trắc")
-    search_query = st.text_input("Nhập số mã quang cần tìm (nhấn Enter để tìm kiếm):")
-
-    if search_query.strip():
-        with st.spinner("Đang tìm kiếm..."):
-            df_result = fetch_lookup_data_from_odoo(search_query)
-        
-        if not df_result.empty:
-            html_table = render_lookup_html_table(df_result)
-            st.markdown(
-                f'<div style="overflow-x: auto; width: 100%;" translate="no">{html_table}</div>', 
-                unsafe_allow_html=True
-            )
-        else:
-            st.info("Không tìm thấy dữ liệu phù hợp.")
-
 
 # ===================================================================
 # 3. CHỨC NĂNG 2: QUẢN LÝ & TRÍCH XUẤT PHIẾU TỔNG HỢP RÚT GỌN
@@ -722,105 +705,10 @@ def render_management_html_table(df):
 
 
 # ===================================================================
-# LOGIC RÚT GỌN CÔNG VIỆC THEO BẢNG QUY TẮC CHI TIẾT
+# LOGIC RÚT GỌN CÔNG VIỆC CHUẨN THEO PHẢN HỒI MỚI NHẤT
 # ===================================================================
-def get_short_work_name(work_str, method_str=""):
-    """Bảng quy tắc rút gọn tên công việc chính xác"""
-    if not work_str:
-        return ""
-    
-    w = str(work_str).strip()
-    w_lower = w.lower()
-    m_str = str(method_str).strip()
-
-    # 1. Kiểm tra các chỉ tiêu BỎ QUA không hiển thị
-    if 'nitơ axit amin so với' in w_lower or 'nito axit amin so voi' in w_lower:
-        return None
-    if 'nitơ amoniac so với' in w_lower or 'nito amoniac so voi' in w_lower:
-        return None
-
-    # 2. Các hàm lượng đường có Testing method QUATEST3 1222:2024 (Ref: AOAC 2018.16)
-    if 'quatest3 1222:2024' in m_str.lower() or 'aoac 2018.16' in m_str.lower():
-        # Chỉ bỏ chữ "hàm lượng" và giữ nguyên phần sau
-        cleaned = re.sub(r'^(hàm lượng|ham luong)\s*', '', w, flags=re.IGNORECASE)
-        return cleaned.strip().capitalize()
-
-    # 3. Tra cứu theo bảng quy tắc khớp chính xác / chứa từ khóa ưu tiên
-    if 'carbohydrate không bao gồm xơ' in w_lower or 'carbohydrat không bao gồm xơ' in w_lower:
-        return 'Carbo'
-    elif 'carbohydrat (*)' in w_lower or 'carbohydrate (*)' in w_lower or 'carbohydrat ⁽*⁾' in w_lower:
-        return 'Carbo(*)'
-    elif 'xơ tổng số (tdf)' in w_lower or 'tdf' in w_lower:
-        return 'TDF'
-    elif 'xơ tiêu hóa' in w_lower or 'xo tiêu hoa' in w_lower:
-        return 'XoTH'
-    elif 'xơ thực phẩm tổng' in w_lower:
-        return 'XoTP'
-    elif 'chất béo bão hòa' in w_lower or 'béo bão hòa' in w_lower:
-        return 'BeoBH'
-    elif 'béo trans' in w_lower or 'trans fat' in w_lower:
-        return 'BeoTrans'
-    elif 'chất béo vắt mì' in w_lower or 'béo vắt mì' in w_lower:
-        return 'BeoVat'
-    elif 'axit béo mạch trung bình' in w_lower or 'mct' in w_lower:
-        return 'MCT'
-    elif 'béo không bão hòa đa' in w_lower or 'pufa' in w_lower:
-        return 'PUFA'
-    elif 'béo không bão hòa đơn' in w_lower or 'mufa' in w_lower:
-        return 'MUFA'
-    elif 'docosahexaenoic acid' in w_lower or 'dha' in w_lower:
-        return 'DHA'
-    elif 'omega 3' in w_lower or 'omg 3' in w_lower or 'α-linolenic acid' in w_lower:
-        return 'Omg3'
-    elif 'omega 6' in w_lower or 'omg 6' in w_lower:
-        return 'Omg6'
-    elif 'omega 9' in w_lower or 'omg 9' in w_lower:
-        return 'Omg9'
-    elif 'nito amoniac' in w_lower or 'nitơ amoniac' in w_lower or 'nh3' in w_lower:
-        return 'NH3'
-    elif 'nitơ amin amoniac' in w_lower or 'nitơ formon' in w_lower or 'nito formon' in w_lower:
-        return 'nitofm'
-    elif 'nitơ axit amin' in w_lower or 'nito axit amin' in w_lower:
-        return 'naa'
-    elif 'nito tổng' in w_lower or 'nitơ tổng' in w_lower:
-        return 'Nito'
-    elif 'đường khử tự do' in w_lower:
-        return 'KhuTD'
-    elif 'đường khử' in w_lower:
-        return 'Khu'
-    elif 'đường tổng' in w_lower:
-        return 'Tong'
-    elif 'lactose monohydrate' in w_lower:
-        return 'lacmono'
-    elif 'axit hydrocyanic' in w_lower or 'hcn' in w_lower:
-        return 'HCN'
-    elif 'độ ẩm vắt' in w_lower or 'ẩm vắt' in w_lower:
-        return 'AmVat'
-    elif 'chất khô' in w_lower:
-        return 'CK'
-    elif 'tinh bột' in w_lower:
-        return 'tb'
-    elif 'acid béo' in w_lower or 'axit béo' in w_lower:
-        return 'ab'
-    elif 'chất béo' in w_lower or 'hàm lượng béo' in w_lower:
-        return 'Béo'
-    elif 'protein' in w_lower or 'đạm' in w_lower:
-        return 'Pro'
-    elif 'độ ẩm' in w_lower or 'ẩm' in w_lower:
-        return 'Ẩm'
-    elif 'tro' in w_lower:
-        return 'Tro'
-    
-    # 4. Các chỉ tiêu acid béo có phương pháp AOAC (996.06) còn lại
-    if '996.06' in m_str.lower():
-        return 'ab'
-
-    # Nếu không thuộc danh sách trên, loại bỏ chữ "Hàm lượng" nếu có
-    cleaned = re.sub(r'^(hàm lượng|ham luong)\s*', '', w, flags=re.IGNORECASE)
-    return cleaned.strip()
-
 def get_short_method_name(method_str):
-    """Rút gọn tên phương pháp thử nghiệm khi bị trùng công việc trong cùng mã"""
+    """Lấy ngắn gọn tên phương pháp thử nghiệm"""
     if not method_str:
         return ""
     m = str(method_str).strip().lower()
@@ -833,11 +721,122 @@ def get_short_method_name(method_str):
     elif 'enzym' in m or 'enzyme' in m:
         return 'Enzym'
     else:
+        # Nếu là mã tiêu chuẩn (ví dụ: QTTN 136:2016 -> 136:2016, TCVN 4326:2001 -> 4326:2001)
+        code_match = re.search(r'(\d+:\d{4})', str(method_str))
+        if code_match:
+            return code_match.group(1)
         upper_matches = re.findall(r'[A-Z0-9]+', str(method_str))
         if upper_matches:
             return upper_matches[0]
-        words = str(method_str).strip().split()
-        return words[0].capitalize() if words else ""
+        return str(method_str).strip().split()[0].capitalize()
+
+def get_short_work_name(work_str, method_str=""):
+    """Bảng quy tắc rút gọn tên công việc chính xác"""
+    if not work_str:
+        return ""
+    
+    w = str(work_str).strip()
+    w_lower = w.lower()
+    m_str = str(method_str).strip()
+
+    # 1. BỎ QUA không hiển thị
+    if 'nitơ axit amin so với' in w_lower or 'nito axit amin so voi' in w_lower:
+        return None
+    if 'nitơ amoniac so với' in w_lower or 'nito amoniac so voi' in w_lower:
+        return None
+
+    # 2. Phương pháp AOAC -> Ghi gọn là 'ab' như acid béo
+    if 'aoac' in m_str.lower() and ('996.06' in m_str.lower() or 'acid béo' in w_lower or 'axit béo' in w_lower):
+        return 'ab'
+
+    # 3. Protein -> LUÔN LUÔN ghi đuôi Testing method
+    if 'protein' in w_lower or 'đạm' in w_lower:
+        m_short = get_short_method_name(m_str)
+        return f"Pro{m_short}"
+
+    # 4. Carbohydrat không bao gồm chất xơ / xơ
+    if 'carbohydrate không bao gồm' in w_lower or 'carbohydrat không bao gồm' in w_lower:
+        return 'Carbo'
+    elif 'carbohydrat (*)' in w_lower or 'carbohydrate (*)' in w_lower or 'carbohydrat ⁽*⁾' in w_lower:
+        return 'Carbo(*)'
+
+    # 5. Chất béo
+    if 'hàm lượng chất béo' in w_lower or 'chất béo' in w_lower:
+        if 'bão hòa' in w_lower:
+            return 'BeoBH'
+        elif 'vắt mì' in w_lower:
+            return 'BeoVat'
+        elif 'trans' in w_lower:
+            return 'BeoTrans'
+        elif 'mạch trung bình' in w_lower or 'mct' in w_lower:
+            return 'MCT'
+        elif 'không bão hòa đa' in w_lower or 'pufa' in w_lower:
+            return 'PUFA'
+        elif 'không bão hòa đơn' in w_lower or 'mufa' in w_lower:
+            return 'MUFA'
+        else:
+            return 'Beo'
+
+    # 6. Đường
+    if 'đường tổng số' in w_lower:
+        return 'TongSK'
+    elif 'đường tổng' in w_lower:
+        return 'Tong'
+    elif 'đường khử tự do' in w_lower:
+        return 'KhuTD'
+    elif 'đường khử' in w_lower:
+        return 'Khu'
+    elif 'lactose monohydrate' in w_lower:
+        return 'lacmono'
+
+    # 7. Xơ & Tinh bột
+    if 'xơ tổng số (tdf)' in w_lower or 'tdf' in w_lower:
+        return 'TDF'
+    elif 'xơ tiêu hóa' in w_lower:
+        return 'XoTH'
+    elif 'xơ thực phẩm tổng' in w_lower:
+        return 'XoTP'
+    elif 'tinh bột' in w_lower:
+        return 'tb'
+
+    # 8. Nitơ
+    if 'nito amoniac' in w_lower or 'nitơ amoniac' in w_lower or 'nh3' in w_lower:
+        return 'NH3'
+    elif 'nitơ amin amoniac' in w_lower or 'nitơ formon' in w_lower or 'nito formon' in w_lower:
+        return 'nitofm'
+    elif 'nitơ axit amin' in w_lower or 'nito axit amin' in w_lower:
+        return 'naa'
+    elif 'nito tổng' in w_lower or 'nitơ tổng' in w_lower:
+        return 'Nito'
+
+    # 9. Vi chất & Khác
+    if 'docosahexaenoic acid' in w_lower or 'dha' in w_lower:
+        return 'DHA'
+    elif 'omega 3' in w_lower or 'omg 3' in w_lower or 'α-linolenic acid' in w_lower:
+        return 'Omg3'
+    elif 'omega 6' in w_lower or 'omg 6' in w_lower:
+        return 'Omg6'
+    elif 'omega 9' in w_lower or 'omg 9' in w_lower:
+        return 'Omg9'
+    elif 'axit hydrocyanic' in w_lower or 'hcn' in w_lower:
+        return 'HCN'
+    elif 'độ ẩm vắt' in w_lower or 'ẩm vắt' in w_lower:
+        return 'AmVat'
+    elif 'độ ẩm' in w_lower or 'ẩm' in w_lower:
+        return 'Am'
+    elif 'chất khô' in w_lower:
+        return 'CK'
+    elif 'tro' in w_lower:
+        return 'Tro'
+
+    # 10. Các hàm lượng đường có Testing method QUATEST3 1222:2024
+    if 'quatest3 1222:2024' in m_str.lower() or 'aoac 2018.16' in m_str.lower():
+        cleaned = re.sub(r'^(hàm lượng|ham luong)\s*', '', w, flags=re.IGNORECASE)
+        return cleaned.strip().capitalize()
+
+    # Mặc định loại bỏ chữ "Hàm lượng"
+    cleaned = re.sub(r'^(hàm lượng|ham luong)\s*', '', w, flags=re.IGNORECASE)
+    return cleaned.strip()
 
 def generate_summary_print_table(df_filtered):
     """Trích xuất bảng dữ liệu Mã quang trắc - Công việc rút gọn"""
@@ -850,7 +849,7 @@ def generate_summary_print_table(df_filtered):
     for code, group in grouped:
         works_in_code = []
         
-        # Đếm tần suất tên rút gọn ban đầu để xử lý các chỉ tiêu trùng tên
+        # Đếm tần suất các tên rút gọn trong cùng 1 mã để xử lý trùng
         short_names_count = {}
         row_short_map = []
 
@@ -860,7 +859,6 @@ def generate_summary_print_table(df_filtered):
             
             s_name = get_short_work_name(w_name, m_name)
             
-            # Nếu chỉ tiêu nằm trong danh sách BỎ QUA (trả về None)
             if s_name is None:
                 continue
                 
@@ -868,8 +866,12 @@ def generate_summary_print_table(df_filtered):
             row_short_map.append((s_name, m_name))
 
         for s_name, m_name in row_short_map:
-            # Nếu có 2 công việc trùng tên rút gọn trong cùng 1 mã -> Ghép thêm Testing Method rút gọn
-            if short_names_count.get(s_name, 0) > 1:
+            # Nếu trùng tên Độ ẩm (Am) trong cùng mã -> Ghép thêm đuôi mã số dính liền với :
+            if s_name == 'Am' and short_names_count.get('Am', 0) > 1:
+                m_short = get_short_method_name(m_name)
+                final_work_str = f"Am{m_short}"
+            # Nếu các tên khác trùng nhau mà chưa ghép đuôi
+            elif short_names_count.get(s_name, 0) > 1 and not any(s_name.startswith(p) for p in ['Pro', 'Am', 'ab']):
                 m_short = get_short_method_name(m_name)
                 final_work_str = f"{s_name}{m_short}"
             else:
@@ -880,7 +882,7 @@ def generate_summary_print_table(df_filtered):
         if not works_in_code:
             continue
 
-        # Giữ thứ tự xuất hiện và xóa trùng lặp
+        # Giữ thứ tự và loại bỏ trùng lặp công việc
         combined_works = ", ".join(dict.fromkeys(works_in_code))
         sample_name = group.iloc[0].get('Mẫu', '')
         
