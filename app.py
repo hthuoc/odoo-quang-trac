@@ -881,24 +881,15 @@ def generate_summary_print_table(df_filtered):
     df_summary = pd.DataFrame(summary_data)
 
     html_lines = []
-    html_lines.append('<div id="print-area">')
-    
-    # SỬA CSS IN NẰM Ở ĐÂY: ÉP CỐ ĐỊNH TRÊN ĐỈNH TRANG A4 BẰNG POSITION FIXED
     html_lines.append('<style>')
     html_lines.append('  .summary-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif; font-size: 13px; table-layout: fixed; }')
     html_lines.append('  .summary-table th, .summary-table td { border: 1px solid #1A202C; padding: 6px 10px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }')
     html_lines.append('  .summary-table th { background-color: #EDF2F7; font-weight: bold; }')
     html_lines.append('  .summary-table tr:nth-child(even) { background-color: #F8FAFC; }')
-    html_lines.append('  @media print {')
-    html_lines.append('      @page { size: A4 portrait; margin: 10mm; }')
-    html_lines.append('      body * { visibility: hidden !important; }')
-    html_lines.append('      #print-area, #print-area * { visibility: visible !important; }')
-    html_lines.append('      #print-area { position: fixed !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }')
-    html_lines.append('  }')
     html_lines.append('</style>')
 
-    html_lines.append('<h4 style="margin-top:0; padding-top:0; font-family: sans-serif;">📋 PHIẾU TỔNG HỢP MÃ QUANG TRẮC & CÔNG VIỆC RÚT GỌN</h4>')
-    html_lines.append('<table class="summary-table"><thead><tr>')
+    # BỎ TIÊU ĐỀ, CHỈ GIỮ BẢNG DỮ LIỆU
+    html_lines.append('<table id="table-to-print" class="summary-table"><thead><tr>')
     html_lines.append('<th style="width: 45px; text-align: center;">STT</th>')
     html_lines.append('<th style="width: 160px;">Mã quang trắc</th>')
     html_lines.append('<th>Mẫu</th>')
@@ -914,7 +905,6 @@ def generate_summary_print_table(df_filtered):
         html_lines.append('</tr>')
 
     html_lines.append('</tbody></table>')
-    html_lines.append('</div>')
     
     return "".join(html_lines)
 
@@ -1077,18 +1067,34 @@ def run_management_app():
             st.markdown("---")
             summary_html = generate_summary_print_table(df_filtered)
             if summary_html:
-                # 1. ĐẶT NÚT IN NẰM TRÊN ĐẦU BẢNG (Dùng window.parent.print())
+                # NÚT IN MỞ CỬA SỔ RIÊNG ĐỂ IN CHUẨN ĐÚNG 1 TRANG
                 components.html(
                     """
-                    <div style="margin-bottom: 10px;" class="no-print-btn">
-                        <button onclick="window.parent.print()" style="background-color: #2563EB; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer;">
+                    <div style="margin-bottom: 10px;">
+                        <button onclick="
+                            var pWin = window.open('', '', 'width=900,height=650');
+                            var tableHtml = window.parent.document.getElementById('table-to-print').outerHTML;
+                            pWin.document.write('<html><head><title>In Bảng Dữ Liệu</title>');
+                            pWin.document.write('<style>');
+                            pWin.document.write('@page { size: A4 portrait; margin: 10mm; }');
+                            pWin.document.write('body { margin: 0; padding: 0; font-family: sans-serif; }');
+                            pWin.document.write('.summary-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }');
+                            pWin.document.write('.summary-table th, .summary-table td { border: 1px solid #1A202C; padding: 6px 10px; text-align: left; vertical-align: middle; word-wrap: break-word; }');
+                            pWin.document.write('.summary-table th { background-color: #EDF2F7; font-weight: bold; }');
+                            pWin.document.write('.summary-table tr:nth-child(even) { background-color: #F8FAFC; }');
+                            pWin.document.write('</style></head><body>');
+                            pWin.document.write(tableHtml);
+                            pWin.document.write('</body></html>');
+                            pWin.document.close();
+                            pWin.focus();
+                            setTimeout(function(){ pWin.print(); pWin.close(); }, 300);
+                        " style="background-color: #2563EB; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer;">
                             🖨️ In / Xuất PDF Phiếu Tổng Hợp
                         </button>
                     </div>
                     """,
                     height=55
                 )
-                # 2. HIỂN THỊ BẢNG BÊN DƯỚI NÚT IN
                 st.markdown(summary_html, unsafe_allow_html=True)
             else:
                 st.warning("Không có dữ liệu để tạo phiếu tổng hợp.")
