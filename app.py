@@ -1091,19 +1091,20 @@ def run_management_app():
             st.markdown("---")
             summary_html = generate_summary_print_table(df_filtered)
             if summary_html:
-                st.markdown(summary_html, unsafe_allow_html=True)
-                
-                # SỬA ĐOẠN NÀY: Gọi window.parent.print() để in đúng toàn bộ Phiếu tổng hợp
+                # 1. ĐẶT NÚT IN LÊN TRÊN ĐẦU BẢNG (Thêm class no-print để ẩn đi khi in)
                 components.html(
                     """
-                    <div style="margin-top: 10px;">
+                    <div style="margin-bottom: 12px;" class="no-print">
                         <button onclick="window.parent.print()" style="background-color: #2563EB; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer;">
                             🖨️ In / Xuất PDF Phiếu Tổng Hợp
                         </button>
                     </div>
                     """,
-                    height=60
+                    height=55
                 )
+
+                # 2. HIỂN THỊ BẢNG PHIẾU TỔNG HỢP BÊN DƯỚI NÚT IN
+                st.markdown(summary_html, unsafe_allow_html=True)
             else:
                 st.warning("Không có dữ liệu để tạo phiếu tổng hợp.")
             st.markdown("---")
