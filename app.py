@@ -140,7 +140,7 @@ def extract_sample_value(row, active_sample_fields):
 
 
 # ===================================================================
-# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC
+# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC (ĐÃ KHÔI PHỤC HOÀN TOÀN GỐC)
 # ===================================================================
 def fetch_lookup_data_from_odoo(query_str):
     if not query_str.strip():
