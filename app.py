@@ -757,31 +757,31 @@ def get_short_work_name(work_str, method_str=""):
             return 'Carbo(*)'
         else:
             return 'Carbo'
-   # 5. Kiểm tra nhóm chất béo / axit béo / omega chạy phương pháp AOAC 996.06 -> 'ab'
-    is_fat_related = any(k in w_lower for k in ['chất béo', 'axit béo', 'acid béo', 'omega', 'omg'])
-    if is_fat_related:
+   # Nhóm Chất béo, Axit béo, Omega
+    if any(k in w_lower for k in ['chất béo', 'axit béo', 'acid béo', 'omega', 'omg']):
         if 'bão hòa đơn' in w_lower or 'mufa' in w_lower:
             return 'MUFA'
         elif 'bão hòa đa' in w_lower or 'pufa' in w_lower:
             return 'PUFA'
         elif 'bão hòa' in w_lower:
             return 'BeoBH'
-        elif 'vắt mì' in w_lower:
-            return 'BeoVat'
         elif 'trans' in w_lower:
             return 'BeoTrans'
+        elif 'vắt mì' in w_lower:
+            return 'BeoVat'
         elif 'mạch trung bình' in w_lower or 'mct' in w_lower:
             return 'MCT'
         elif '996.06' in m_str.lower():
             return 'ab'
-        elif 'omega 3' in w_lower or 'omg 3' in w_lower or 'α-linolenic acid' in w_lower:
-            return 'Omg3' # Hoặc nếu anh muốn gom hết 996.06 thành ab thì cứ để lọt xuống dưới
-        # Nếu chỉ riêng Omega 3, 6, 9 theo 996.06 mà anh vẫn muốn gom thành ab:
-        elif '996.06' in m_str.lower():
-            return 'ab'
+        elif 'omega 3' in w_lower or 'omg 3' in w_lower:
+            return 'Omg3'
+        elif 'omega 6' in w_lower or 'omg 6' in w_lower:
+            return 'Omg6'
+        elif 'omega 9' in w_lower or 'omg 9' in w_lower:
+            return 'Omg9'
         else:
             return 'Beo'
-
+            
     # 6. Đường
     if 'đường tổng số' in w_lower:
         return 'TongSK'
