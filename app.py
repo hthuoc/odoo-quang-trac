@@ -892,28 +892,26 @@ def generate_summary_print_table(df_filtered):
 
     df_summary = pd.DataFrame(summary_data)
 
-    # Dùng bảng HTML đơn giản, sạch sẽ
-    html_out = '<div id="summary-print-container">'
-    html_out += '<h3 style="margin-top:0; font-family: sans-serif;">📋 PHIẾU TỔNG HỢP MÃ QUANG TRẮC & CÔNG VIỆC RÚT GỌN</h3>'
-    html_out += '<table style="width:100%; border-collapse:collapse; font-size:13px; font-family:sans-serif;">'
-    html_out += '<thead><tr style="background-color:#EDF2F7;">'
-    html_out += '<th style="border:1px solid #1A202C; padding:6px; width:45px; text-align:center;">STT</th>'
-    html_out += '<th style="border:1px solid #1A202C; padding:6px; width:160px;">Mã quang trắc</th>'
-    html_out += '<th style="border:1px solid #1A202C; padding:6px;">Mẫu</th>'
-    html_out += '<th style="border:1px solid #1A202C; padding:6px; width:150px;">Công việc rút gọn</th>'
-    html_out += '</tr></thead><tbody>'
+    html_lines = []
+    html_lines.append('<h3>📋 PHIẾU TỔNG HỢP MÃ QUANG TRẮC & CÔNG VIỆC RÚT GỌN</h3>')
+    html_lines.append('<table style="width:100%; border-collapse:collapse; font-size:13px; font-family:sans-serif;"><thead><tr style="background-color:#EDF2F7;">')
+    html_lines.append('<th style="border:1px solid #1A202C; padding:6px; width:45px; text-align:center;">STT</th>')
+    html_lines.append('<th style="border:1px solid #1A202C; padding:6px; width:160px;">Mã quang trắc</th>')
+    html_lines.append('<th style="border:1px solid #1A202C; padding:6px;">Mẫu</th>')
+    html_lines.append('<th style="border:1px solid #1A202C; padding:6px; width:150px;">Công việc rút gọn</th>')
+    html_lines.append('</tr></thead><tbody>')
 
     for idx, row in df_summary.iterrows():
-        bg_color = '#F8FAFC' if idx % 2 == 1 else '#FFFFFF'
-        html_out += f'<tr style="background-color:{bg_color};">'
-        html_out += f'<td style="border:1px solid #1A202C; padding:6px; text-align:center;">{idx + 1}</td>'
-        html_out += f'<td style="border:1px solid #1A202C; padding:6px;"><b>{row["Mã quang trắc"]}</b></td>'
-        html_out += f'<td style="border:1px solid #1A202C; padding:6px;">{row["Mẫu"]}</td>'
-        html_out += f'<td style="border:1px solid #1A202C; padding:6px;"><b>{row["Công việc (Rút gọn)"]}</b></td>'
-        html_out += '</tr>'
+        bg = '#F8FAFC' if idx % 2 == 1 else '#FFFFFF'
+        html_lines.append(f'<tr style="background-color:{bg};">')
+        html_lines.append(f'<td style="border:1px solid #1A202C; padding:6px; text-align:center;">{idx + 1}</td>')
+        html_lines.append(f'<td style="border:1px solid #1A202C; padding:6px;"><b>{row["Mã quang trắc"]}</b></td>')
+        html_lines.append(f'<td style="border:1px solid #1A202C; padding:6px;">{row["Mẫu"]}</td>')
+        html_lines.append(f'<td style="border:1px solid #1A202C; padding:6px;"><b>{row["Công việc (Rút gọn)"]}</b></td>')
+        html_lines.append('</tr>')
 
-    html_out += '</tbody></table></div>'
-    return html_out
+    html_lines.append('</tbody></table>')
+    return "".join(html_lines)
 
 def run_management_app():
     col_title, col_reload = st.columns([8, 2])
@@ -1064,7 +1062,7 @@ def run_management_app():
 
         df_filtered['Trạng thái hạn'] = df_filtered.apply(update_status_circle, axis=1)
 
-      # THANH CÔNG CỤ XUẤT / IN PHIẾU TỔNG HỢP
+     # THANH CÔNG CỤ XUẤT / IN PHIẾU TỔNG HỢP
     col_summary_btn, _ = st.columns([3, 9])
     with col_summary_btn:
         show_print_view = st.checkbox("📄 Hiển thị Phiếu tổng hợp để in", value=False)
@@ -1073,10 +1071,10 @@ def run_management_app():
         st.markdown("---")
         summary_html = generate_summary_print_table(df_filtered)
         if summary_html:
-            # 1. NÚT IN AN TOÀN ĐẶT PHÍA TRÊN
+            # NÚT IN NẰM TRÊN ĐẦU BẢNG
             components.html(
                 """
-                <div style="margin-bottom: 8px;">
+                <div style="margin-bottom: 10px;">
                     <button onclick="window.parent.print()" style="background-color: #2563EB; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer;">
                         🖨️ In / Xuất PDF Phiếu Tổng Hợp
                     </button>
@@ -1084,11 +1082,11 @@ def run_management_app():
                 """,
                 height=50
             )
-            # 2. BẢNG PHIẾU TỔNG HỢP
             st.markdown(summary_html, unsafe_allow_html=True)
         else:
             st.warning("Không có dữ liệu để tạo phiếu tổng hợp.")
         st.markdown("---")
+        
         if not df_filtered.empty:
             html_table = render_management_html_table(df_filtered)
             st.markdown(
