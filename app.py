@@ -1083,16 +1083,20 @@ def run_management_app():
                     """
                     <div style="margin-bottom: 10px;">
                         <button onclick="
-                            var pWin = window.open('', '', 'width=950,height=650');
+                            var pWin = window.open('', '', 'width=1100,height=750');
                             var tableHtml = window.parent.document.getElementById('table-to-print').outerHTML;
                             pWin.document.write('<html><head><title>In Bảng Dữ Liệu</title>');
                             pWin.document.write('<style>');
-                            pWin.document.write('@page { size: A4 portrait; margin: 10mm; }');
+                            pWin.document.write('@page { size: A4 landscape; margin: 10mm; }'); /* Đổi sang in ngang */
                             pWin.document.write('body { margin: 0; padding: 0; font-family: sans-serif; }');
                             pWin.document.write('.summary-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }');
                             pWin.document.write('.summary-table th, .summary-table td { border: 1px solid #1A202C; padding: 6px 10px; text-align: left; vertical-align: middle; word-wrap: break-word; }');
                             pWin.document.write('.summary-table th { background-color: #EDF2F7; font-weight: bold; }');
                             pWin.document.write('.summary-table tr:nth-child(even) { background-color: #F8FAFC; }');
+                            /* Tăng độ rộng cột Công việc khi in ngang */
+                            pWin.document.write('.summary-table th:nth-child(1), .summary-table td:nth-child(1) { width: 50px; text-align: center; }');
+                            pWin.document.write('.summary-table th:nth-child(2), .summary-table td:nth-child(2) { width: 160px; }');
+                            pWin.document.write('.summary-table th:nth-child(3), .summary-table td:nth-child(3) { width: 350px; }');
                             pWin.document.write('</style></head><body>');
                             pWin.document.write(tableHtml);
                             pWin.document.write('</body></html>');
