@@ -744,10 +744,6 @@ def get_short_work_name(work_str, method_str=""):
     if 'nitơ amoniac so với' in w_lower or 'nito amoniac so voi' in w_lower:
         return None
 
-    # 2. Phương pháp AOAC -> Ghi gọn là 'ab' như acid béo
-    if 'aoac' in m_str.lower() and ('996.06' in m_str.lower() or 'acid béo' in w_lower or 'axit béo' in w_lower):
-        return 'ab'
-
     # 3. Protein -> LUÔN LUÔN ghi đuôi Testing method
     if 'protein' in w_lower or 'đạm' in w_lower:
         m_short = get_short_method_name(m_str)
