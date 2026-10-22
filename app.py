@@ -893,19 +893,39 @@ def generate_summary_print_table(df_filtered):
     df_summary = pd.DataFrame(summary_data)
 
     html_lines = []
-    html_lines.append('<div id="print-area">')
+    # Thêm class printable-summary để nhận diện duy nhất khu vực này khi in
+    html_lines.append('<div id="print-area" class="printable-summary">')
+    
+    # NÚT IN ĐẶT TRỰC TIẾP TRÊN ĐẦU BẢNG (Dùng JS ẩn trang chính, in khu vực này rồi khôi phục)
+    html_lines.append('''
+    <div class="no-print-btn-container" style="margin-bottom: 15px;">
+        <button onclick="
+            var printArea = document.getElementById('print-area');
+            var body = document.body;
+            var originalStyle = printArea.style.cssText;
+            
+            document.querySelectorAll('body > div:not(#root), #root > div:not(.element-container)').forEach(function(el) {
+                el.classList.add('hide-for-print');
+            });
+            
+            window.print();
+        " style="background-color: #2563EB; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;">
+            🖨️ In / Xuất PDF Phiếu Tổng Hợp
+        </button>
+    </div>
+    ''')
+
     html_lines.append('<style>')
-    # CSS TỐI ƯU KHỔ IN A4 - KHÔNG CÒN KHOẢNG TRẮNG DỪA
     html_lines.append('  .summary-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif; font-size: 13px; }')
     html_lines.append('  .summary-table th, .summary-table td { border: 1px solid #1A202C; padding: 6px 10px; text-align: left; vertical-align: middle; word-wrap: break-word; }')
     html_lines.append('  .summary-table th { background-color: #EDF2F7; font-weight: bold; }')
     html_lines.append('  .summary-table tr:nth-child(even) { background-color: #F8FAFC; }')
     
+    # CSS CHUẨN KHI BẤM XUẤT PRINT
     html_lines.append('  @media print {')
     html_lines.append('      @page { size: A4 portrait; margin: 12mm 10mm; }')
-    html_lines.append('      body * { display: none !important; }')
-    html_lines.append('      #print-area, #print-area * { display: revert !important; visibility: visible !important; }')
-    html_lines.append('      #print-area { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }')
+    html_lines.append('      header, footer, .no-print-btn-container, [data-testid="stHeader"], [data-testid="stSidebar"], .stButton, .stCheckbox { display: none !important; }')
+    html_lines.append('      .printable-summary { display: block !important; visibility: visible !important; width: 100% !important; position: absolute !important; left: 0 !important; top: 0 !important; margin: 0 !important; padding: 0 !important; }')
     html_lines.append('      .summary-table { page-break-inside: auto; }')
     html_lines.append('      .summary-table tr { page-break-inside: avoid; page-break-after: auto; }')
     html_lines.append('  }')
@@ -916,7 +936,7 @@ def generate_summary_print_table(df_filtered):
     html_lines.append('<th style="width: 45px; text-align: center;">STT</th>')
     html_lines.append('<th style="width: 160px;">Mã quang trắc</th>')
     html_lines.append('<th>Mẫu</th>')
-    html_lines.append('<th style="width: 140px;">Công việc rút gọn</th>')
+    html_lines.append('<th style="width: 150px;">Công việc rút gọn</th>')
     html_lines.append('</tr></thead><tbody>')
 
     for idx, row in df_summary.iterrows():
@@ -931,7 +951,6 @@ def generate_summary_print_table(df_filtered):
     html_lines.append('</div>')
     
     return "".join(html_lines)
-
 
 def run_management_app():
     col_title, col_reload = st.columns([8, 2])
@@ -1082,7 +1101,7 @@ def run_management_app():
 
         df_filtered['Trạng thái hạn'] = df_filtered.apply(update_status_circle, axis=1)
 
-        # THANH CÔNG CỤ XUẤT / IN PHIẾU TỔNG HỢP
+       # THANH CÔNG CỤ XUẤT / IN PHIẾU TỔNG HỢP
         col_summary_btn, _ = st.columns([3, 9])
         with col_summary_btn:
             show_print_view = st.checkbox("📄 Hiển thị Phiếu tổng hợp để in", value=False)
@@ -1091,19 +1110,7 @@ def run_management_app():
             st.markdown("---")
             summary_html = generate_summary_print_table(df_filtered)
             if summary_html:
-                # 1. ĐẶT NÚT IN LÊN TRÊN ĐẦU BẢNG (Thêm class no-print để ẩn đi khi in)
-                components.html(
-                    """
-                    <div style="margin-bottom: 12px;" class="no-print">
-                        <button onclick="window.parent.print()" style="background-color: #2563EB; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer;">
-                            🖨️ In / Xuất PDF Phiếu Tổng Hợp
-                        </button>
-                    </div>
-                    """,
-                    height=55
-                )
-
-                # 2. HIỂN THỊ BẢNG PHIẾU TỔNG HỢP BÊN DƯỚI NÚT IN
+                # Render trực tiếp cả nút in lẫn bảng vào giao diện chính
                 st.markdown(summary_html, unsafe_allow_html=True)
             else:
                 st.warning("Không có dữ liệu để tạo phiếu tổng hợp.")
