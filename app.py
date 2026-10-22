@@ -6,6 +6,7 @@ import time as time_lib
 import json
 import os
 import ssl
+import re
 import streamlit.components.v1 as components
 
 # ===================================================================
@@ -356,10 +357,9 @@ def run_lookup_app():
 
 
 # ===================================================================
-# 3. CHỨC NĂNG 2: QUẢN LÝ (TẢI 1 LẦN VÀO RAM - LỌC TỨC THÌ)
+# 3. CHỨC NĂNG 2: QUẢN LÝ & TRÍCH XUẤT PHIẾU TỔNG HỢP RÚT GỌN
 # ===================================================================
 def fetch_management_data_from_odoo():
-    """Hàm tải và chuẩn hóa toàn bộ dữ liệu Odoo vào RAM"""
     max_retries = 3
     valid_ids = get_odoo_user_and_partner_ids()
     valid_odoo_fields = get_assign_work_line_fields()
@@ -522,7 +522,6 @@ def fetch_management_data_from_odoo():
             deadline_col = [k for k, v in actual_fields_map.items() if v == 'Thời hạn'][0]
             start_date_col = [k for k, v in actual_fields_map.items() if v == 'Ngày phân công'][0]
 
-            # ĐÃ ĐÓNG NGOẶC CHUẨN XÁC CẢ 2 DÒNG DƯỚI ĐÂY
             df['deadline_dt'] = pd.to_datetime(df[deadline_col], errors='coerce')
             df['start_date_dt'] = pd.to_datetime(df[start_date_col], errors='coerce')
 
@@ -620,7 +619,6 @@ def fetch_management_data_from_odoo():
                 return pd.DataFrame()
 
 def render_management_html_table(df):
-    """Giữ nguyên 100% thiết kế bảng cũ (có merge cell rowspan và viền phân nhóm)"""
     if df.empty:
         return ""
 
@@ -723,6 +721,139 @@ def render_management_html_table(df):
     return "".join(html_lines)
 
 
+# ===================================================================
+# LOGIC RÚT GỌN CÔNG VIỆC VÀ TẠO BẢNG TỔNG HỢP ĐỂ IN
+# ===================================================================
+def get_short_work_name(work_str):
+    """Quy tắc chuyển tên công việc thành dạng rút gọn ngắn"""
+    if not work_str:
+        return ""
+    w = str(work_str).strip().lower()
+    
+    if 'protein' in w or 'đạm' in w:
+        return 'Pro'
+    elif 'xơ' in w or 'fiber' in w:
+        return 'Xơ'
+    elif 'ẩm' in w or 'moisture' in w:
+        return 'Ẩm'
+    elif 'tro' in w or 'ash' in w:
+        return 'Tro'
+    elif 'béo' in w or 'fat' in w:
+        return 'Béo'
+    elif 'đường' in w or 'sugar' in w:
+        return 'Đường'
+    elif 'muối' in w or 'nacl' in w:
+        return 'Muối'
+    else:
+        # Nếu là công việc khác, lấy từ chính nghĩa (viết hoa chữ cái đầu)
+        words = str(work_str).strip().split()
+        if len(words) <= 2:
+            return str(work_str).strip()
+        return "".join([word[0].upper() for word in words if word])
+
+def get_short_method_name(method_str):
+    """Lấy ngắn gọn tên phương pháp thử nghiệm"""
+    if not method_str:
+        return ""
+    m = str(method_str).strip().lower()
+    if 'dumas' in m:
+        return 'Dumas'
+    elif 'kjeldahl' in m or 'kejhdal' in m or 'kjel' in m:
+        return 'Kjeldahl'
+    elif 'sắc ký' in m or 'chromatography' in m:
+        return 'SK'
+    elif 'enzym' in m or 'enzyme' in m:
+        return 'Enzym'
+    else:
+        # Trích xuất từ viết hoa hoặc lấy ngắn gọn
+        upper_matches = re.findall(r'[A-Z0-9]+', str(method_str))
+        if upper_matches:
+            return upper_matches[0]
+        return str(method_str).strip().split()[0].capitalize()
+
+def generate_summary_print_table(df_filtered):
+    """Tạo bảng trích xuất Mã quang trắc - Công việc rút gọn để in"""
+    if df_filtered.empty or 'Mã quang trắc' not in df_filtered.columns:
+        return ""
+
+    # Nhóm theo Mã quang trắc
+    summary_data = []
+    
+    grouped = df_filtered.groupby('Mã quang trắc', sort=False)
+    for code, group in grouped:
+        # Lấy danh sách các công việc thuộc mã này
+        works_in_code = []
+        
+        # Đếm tần suất tên công việc ngắn để phát hiện trùng lặp
+        short_names_count = {}
+        for _, row in group.iterrows():
+            w_name = row.get('Công việc', '')
+            s_name = get_short_work_name(w_name)
+            short_names_count[s_name] = short_names_count.get(s_name, 0) + 1
+            
+        for _, row in group.iterrows():
+            w_name = row.get('Công việc', '')
+            s_name = get_short_work_name(w_name)
+            m_name = row.get('Testing method', '')
+            
+            # Nếu trong cùng mã có 2 công việc bị trùng tên rút gọn -> ghép thêm Testing Method
+            if short_names_count.get(s_name, 0) > 1:
+                m_short = get_short_method_name(m_name)
+                final_work_str = f"{s_name}{m_short}"
+            else:
+                final_work_str = s_name
+                
+            works_in_code.append(final_work_str)
+            
+        # Nối danh sách các công việc bằng dấu phẩy
+        combined_works = ", ".join(dict.fromkeys(works_in_code)) # Xóa trùng lặp nếu trùng
+        sample_name = group.iloc[0].get('Mẫu', '')
+        
+        summary_data.append({
+            'Mã quang trắc': code,
+            'Mẫu': sample_name,
+            'Công việc (Rút gọn)': combined_works
+        })
+
+    df_summary = pd.DataFrame(summary_data)
+
+    html_lines = []
+    html_lines.append('<div id="print-area">')
+    html_lines.append('<style>')
+    html_lines.append('  .summary-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif; font-size: 14px; }')
+    html_lines.append('  .summary-table th, .summary-table td { border: 1px solid #1A202C; padding: 8px 12px; text-align: left; }')
+    html_lines.append('  .summary-table th { background-color: #EDF2F7; font-weight: bold; }')
+    html_lines.append('  .summary-table tr:nth-child(even) { background-color: #F8FAFC; }')
+    html_lines.append('  @media print {')
+    html_lines.append('      body * { visibility: hidden; }')
+    html_lines.append('      #print-area, #print-area * { visibility: visible; }')
+    html_lines.append('      #print-area { position: absolute; left: 0; top: 0; width: 100%; }')
+    html_lines.append('      .no-print { display: none !important; }')
+    html_lines.append('  }')
+    html_lines.append('</style>')
+
+    html_lines.append('<h4>📋 PHIẾU TỔNG HỢP MÃ QUANG TRẮC & CÔNG VIỆC</h4>')
+    html_lines.append('<table class="summary-table"><thead><tr>')
+    html_lines.append('<th style="width: 50px; text-align: center;">STT</th>')
+    html_lines.append('<th style="width: 180px;">Mã quang trắc</th>')
+    html_lines.append('<th>Mẫu</th>')
+    html_lines.append('<th>Công việc rút gọn</th>')
+    html_lines.append('</tr></thead><tbody>')
+
+    for idx, row in df_summary.iterrows():
+        html_lines.append('<tr>')
+        html_lines.append(f'<td style="text-align: center;">{idx + 1}</td>')
+        html_lines.append(f'<td><b>{row["Mã quang trắc"]}</b></td>')
+        html_lines.append(f'<td>{row["Mẫu"]}</td>')
+        html_lines.append(f'<td><b>{row["Công việc (Rút gọn)"]}</b></td>')
+        html_lines.append('</tr>')
+
+    html_lines.append('</tbody></table>')
+    html_lines.append('</div>')
+    
+    return "".join(html_lines)
+
+
 def run_management_app():
     col_title, col_reload = st.columns([8, 2])
     with col_title:
@@ -761,12 +892,10 @@ def run_management_app():
     </div>
     """, unsafe_allow_html=True)
 
-    # NẾU CHƯA CÓ TRONG RAM THÌ MỚI GỌI KẾT NỐI ODOO 1 LẦN DUY NHẤT
     if 'mgmt_df_raw' not in st.session_state:
         with st.spinner("Đang kết nối và tải toàn bộ dữ liệu từ Odoo..."):
             st.session_state['mgmt_df_raw'] = fetch_management_data_from_odoo()
 
-    # DÙNG DỮ LIỆU CÓ SẴN TRONG MEMORY RAM DÀNH CHO BỘ LỌC
     df_raw = st.session_state['mgmt_df_raw']
 
     if not df_raw.empty:
@@ -785,7 +914,7 @@ def run_management_app():
                 ~df_filtered['Công việc'].astype(str).str.strip().str.lower().str.startswith('năng lượng')
             ].copy()
 
-        # BỘ LỌC LỌC TRỰC TIẾP TRÊN RAM (TỐC ĐỘ TỨC THÌ)
+        # BỘ LỌC CỰC NHANH TRÊN MEMORY RAM
         with st.container():
             col1, col2, col3, col4, col5, col6 = st.columns(6)
 
@@ -873,6 +1002,28 @@ def run_management_app():
             return f'<div style="text-align: center;"><span style="display:inline-block; width:14px; height:14px; border-radius:50%; background-color:{color};" title="{title}"></span></div>'
 
         df_filtered['Trạng thái hạn'] = df_filtered.apply(update_status_circle, axis=1)
+
+        # THANH CÔNG CỤ XUẤT / IN PHIẾU TỔNG HỢP
+        col_summary_btn, _ = st.columns([3, 9])
+        with col_summary_btn:
+            show_print_view = st.checkbox("📄 Hiển thị Phiếu tổng hợp để in", value=False)
+
+        if show_print_view:
+            st.markdown("---")
+            summary_html = generate_summary_print_table(df_filtered)
+            if summary_html:
+                st.markdown(summary_html, unsafe_allow_html=True)
+                components.html(
+                    """
+                    <button onclick="window.print()" style="background-color: #2563EB; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px;">
+                        🖨️ In / Xuất PDF Phiếu Tổng Hợp
+                    </button>
+                    """,
+                    height=60
+                )
+            else:
+                st.warning("Không có dữ liệu để tạo phiếu tổng hợp.")
+            st.markdown("---")
 
         if not df_filtered.empty:
             html_table = render_management_html_table(df_filtered)
