@@ -750,11 +750,11 @@ def get_short_work_name(work_str, method_str=""):
         m_short = get_short_method_name(m_str)
         return f"Pro{m_short}"
 
-    if 'carbohydrate không bao gồm' in w_lower or 'carbohydrat không bao gồm' in w_lower:
+   if 'carbohydrate không bao gồm' in w_lower or 'carbohydrat không bao gồm' in w_lower:
         return 'Carbo'
-    elif 'carbohydrat (*)' in w_lower or 'carbohydrate (*)' in w_lower or 'carbohydrat ⁽*⁾' in w_lower:
+    elif re.search(r'carbohydrat[e]?\s*[\(\[\{].*[\*\∗\⁽\*\⁾].*[\)\]\}]', w_lower) or 'carbohydrat (*)' in w_lower or 'carbohydrate (*)' in w_lower:
         return 'Carbo(*)'
-    elif 'carbohydrat' in w_lower or 'carbohydrate' in w_lower:
+    elif 'carbohydrate' in w_lower or 'carbohydrat' in w_lower:
         return 'Carbo'
 
     if 'hàm lượng chất béo' in w_lower or 'chất béo' in w_lower:
@@ -857,7 +857,7 @@ def generate_summary_print_table(df_filtered):
             if s_name == 'Am' and short_names_count.get('Am', 0) > 1:
                 m_short = get_short_method_name(m_name)
                 final_work_str = f"Am{m_short}"
-            elif short_names_count.get(s_name, 0) > 1 and not any(s_name.startswith(p) for p in ['Pro', 'Am', 'ab']):
+            elif short_names_count.get(s_name, 0) > 1 and not any(s_name.startswith(p) for p in ['Pro', 'Am', 'ab', 'Carbo']):
                 m_short = get_short_method_name(m_name)
                 final_work_str = f"{s_name}{m_short}"
             else:
