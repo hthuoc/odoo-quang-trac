@@ -883,7 +883,7 @@ def generate_summary_print_table(df_filtered):
     html_lines = []
     html_lines.append('<div id="print-area">')
     
-    # CSS tối ưu chuẩn khổ in A4 (Dùng visibility để hiển thị duy nhất khu vực #print-area)
+    # SỬA CSS IN NẰM Ở ĐÂY: ÉP CỐ ĐỊNH TRÊN ĐỈNH TRANG A4 BẰNG POSITION FIXED
     html_lines.append('<style>')
     html_lines.append('  .summary-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif; font-size: 13px; table-layout: fixed; }')
     html_lines.append('  .summary-table th, .summary-table td { border: 1px solid #1A202C; padding: 6px 10px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }')
@@ -893,8 +893,7 @@ def generate_summary_print_table(df_filtered):
     html_lines.append('      @page { size: A4 portrait; margin: 10mm; }')
     html_lines.append('      body * { visibility: hidden !important; }')
     html_lines.append('      #print-area, #print-area * { visibility: visible !important; }')
-    html_lines.append('      #print-area { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }')
-    html_lines.append('      .no-print-btn { display: none !important; }')
+    html_lines.append('      #print-area { position: fixed !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }')
     html_lines.append('  }')
     html_lines.append('</style>')
 
