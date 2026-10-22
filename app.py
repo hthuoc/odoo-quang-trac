@@ -756,11 +756,11 @@ def get_short_work_name(work_str, method_str=""):
     # 4. Carbohydrat
     if 'carbohydrate không bao gồm' in w_lower or 'carbohydrat không bao gồm' in w_lower:
         return 'Carbo'
-    elif re.search(r'carbohydrat[e]?\s*[\(\[\{].*[\*\∗\⁽\*\⁾].*[\)\]\}]', w_lower) or 'carbohydrat (*)' in w_lower or 'carbohydrate (*)' in w_lower:
-        return 'Carbo(*)'
-    elif 'carbohydrate' in w_lower or 'carbohydrat' in w_lower:
-        return 'Carbo'
-
+    elif 'carbohydrat' in w_lower or 'carbohydrate' in w_lower:
+        if '(' in w or '⁽' in w or '[' in w or '{' in w:
+            return 'Carbo(*)'
+        else:
+            return 'Carbo'
     # 5. Chất béo
     if 'hàm lượng chất béo' in w_lower or 'chất béo' in w_lower:
         if 'bão hòa' in w_lower:
