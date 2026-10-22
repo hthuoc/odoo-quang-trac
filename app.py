@@ -1093,11 +1093,15 @@ def run_management_app():
             summary_html = generate_summary_print_table(df_filtered)
             if summary_html:
                 st.markdown(summary_html, unsafe_allow_html=True)
+                
+                # SỬA ĐOẠN NÀY: Gọi window.parent.print() để in đúng toàn bộ Phiếu tổng hợp
                 components.html(
                     """
-                    <button onclick="window.print()" style="background-color: #2563EB; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px;">
-                        🖨️ In / Xuất PDF Phiếu Tổng Hợp
-                    </button>
+                    <div style="margin-top: 10px;">
+                        <button onclick="window.parent.print()" style="background-color: #2563EB; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer;">
+                            🖨️ In / Xuất PDF Phiếu Tổng Hợp
+                        </button>
+                    </div>
                     """,
                     height=60
                 )
