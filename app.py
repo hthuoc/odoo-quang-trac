@@ -754,6 +754,8 @@ def get_short_work_name(work_str, method_str=""):
         return 'Carbo'
     elif 'carbohydrat (*)' in w_lower or 'carbohydrate (*)' in w_lower or 'carbohydrat ⁽*⁾' in w_lower:
         return 'Carbo(*)'
+    elif 'carbohydrat' in w_lower or 'carbohydrate' in w_lower:
+        return 'Carbo'
 
     if 'hàm lượng chất béo' in w_lower or 'chất béo' in w_lower:
         if 'bão hòa' in w_lower:
