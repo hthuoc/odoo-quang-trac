@@ -709,7 +709,7 @@ def render_management_html_table(df):
 
 
 # ===================================================================
-# LOGIC RÚT GỌN CÔNG VIỆC CHUẨN THEO PHẢN HỒI MỚI NHẤT
+# LOGIC RÚT GỌN CÔNG VIỆC CHUẨN
 # ===================================================================
 def get_short_method_name(method_str):
     """Lấy ngắn gọn tên phương pháp thử nghiệm"""
@@ -754,7 +754,7 @@ def get_short_work_name(work_str, method_str=""):
         return f"Pro{m_short}"
 
     # 4. Carbohydrat
-    if 'carbohydrate không bao gồm' in w_lower or 'carbohydrat tidak bao gồm' in w_lower or 'carbohydrat không bao gồm' in w_lower:
+    if 'carbohydrate không bao gồm' in w_lower or 'carbohydrat không bao gồm' in w_lower:
         return 'Carbo'
     elif 'carbohydrat' in w_lower or 'carbohydrate' in w_lower:
         if '(' in w or '⁽' in w or '[' in w or '{' in w:
@@ -762,7 +762,7 @@ def get_short_work_name(work_str, method_str=""):
         else:
             return 'Carbo'
             
-    # 5. Nhóm Chất béo, Axit béo, Omega (Ưu tiên AOAC 996.06 và các loại béo đặc thù)
+    # 5. Nhóm Chất béo, Axit béo, Omega
     if '996.06' in m_str.lower() or any(k in w_lower for k in ['chất béo', 'béo', 'axit béo', 'acid béo', 'omega', 'omg']):
         if 'bão hòa đơn' in w_lower or 'mufa' in w_lower:
             return 'MUFA'
@@ -844,7 +844,7 @@ def get_short_work_name(work_str, method_str=""):
     return cleaned.strip()
 
 def generate_summary_print_table(df_filtered):
-    """Trích xuất bảng dữ liệu Mã quang trắc - Công việc rút gọn chuẩn in A4"""
+    """Trích xuất bảng dữ liệu Mã quang trắc - Công việc rút gọn chuẩn in A4 ngang"""
     if df_filtered.empty or 'Mã quang trắc' not in df_filtered.columns:
         return ""
 
@@ -905,7 +905,6 @@ def generate_summary_print_table(df_filtered):
     html_lines.append('  .summary-table tr:nth-child(even) { background-color: #F8FAFC; }')
     html_lines.append('</style>')
 
-    # ĐIỀU CHỈNH ĐỘ RỘNG CỘT & ĐỔI TÊN TIÊU ĐỀ THÀNH "Công việc"
     html_lines.append('<table id="table-to-print" class="summary-table"><thead><tr>')
     html_lines.append('<th style="width: 50px; text-align: center;">STT</th>')
     html_lines.append('<th style="width: 160px;">Mã quang trắc</th>')
@@ -940,8 +939,7 @@ def run_management_app():
     if "ignore_job_id" in query_params:
         job_id_to_ignore = query_params["ignore_job_id"]
         save_ignored_job(job_id_to_ignore)
-        if "ignore_job_id" in st.query_params:
-            del st.query_params["ignore_job_id"]
+        st.query_params.clear()
         st.rerun()
 
     st.markdown("""
@@ -987,7 +985,6 @@ def run_management_app():
                 ~df_filtered['Công việc'].astype(str).str.strip().str.lower().str.startswith('năng lượng')
             ].copy()
 
-        # BỘ LỌC CỰC NHANH TRÊN MEMORY RAM
         with st.container():
             col1, col2, col3, col4, col5, col6 = st.columns(6)
 
@@ -1076,7 +1073,6 @@ def run_management_app():
 
         df_filtered['Trạng thái hạn'] = df_filtered.apply(update_status_circle, axis=1)
 
-        # THANH CÔNG CỤ XUẤT / IN PHIẾU TỔNG HỢP (ĐÃ CẬP NHẬT IN NGANG & TĂNG RỘNG CỘT CÔNG VIỆC)
         col_summary_btn, _ = st.columns([3, 9])
         with col_summary_btn:
             show_print_view = st.checkbox("📄 Hiển thị Phiếu tổng hợp để in", value=False)
