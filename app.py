@@ -872,7 +872,7 @@ def generate_summary_print_table(df_filtered):
         summary_data.append({
             'Mã quang trắc': code,
             'Mẫu': sample_name,
-            'Công việc (Rút gọn)': combined_works
+            'Công việc': combined_works
         })
 
     if not summary_data:
@@ -888,12 +888,12 @@ def generate_summary_print_table(df_filtered):
     html_lines.append('  .summary-table tr:nth-child(even) { background-color: #F8FAFC; }')
     html_lines.append('</style>')
 
-    # BỎ TIÊU ĐỀ, CHỈ GIỮ BẢNG DỮ LIỆU
+    # ĐIỀU CHỈNH ĐỘ RỘNG CỘT & ĐỔI TÊN TIÊU ĐỀ THÀNH "Công việc"
     html_lines.append('<table id="table-to-print" class="summary-table"><thead><tr>')
     html_lines.append('<th style="width: 45px; text-align: center;">STT</th>')
-    html_lines.append('<th style="width: 160px;">Mã quang trắc</th>')
-    html_lines.append('<th>Mẫu</th>')
-    html_lines.append('<th style="width: 150px;">Công việc rút gọn</th>')
+    html_lines.append('<th style="width: 150px;">Mã quang trắc</th>')
+    html_lines.append('<th style="width: 400px;">Mẫu</th>')
+    html_lines.append('<th>Công việc</th>')
     html_lines.append('</tr></thead><tbody>')
 
     for idx, row in df_summary.iterrows():
@@ -901,7 +901,7 @@ def generate_summary_print_table(df_filtered):
         html_lines.append(f'<td style="text-align: center;">{idx + 1}</td>')
         html_lines.append(f'<td><b>{row["Mã quang trắc"]}</b></td>')
         html_lines.append(f'<td>{row["Mẫu"]}</td>')
-        html_lines.append(f'<td><b>{row["Công việc (Rút gọn)"]}</b></td>')
+        html_lines.append(f'<td><b>{row["Công việc"]}</b></td>')
         html_lines.append('</tr>')
 
     html_lines.append('</tbody></table>')
@@ -1067,12 +1067,11 @@ def run_management_app():
             st.markdown("---")
             summary_html = generate_summary_print_table(df_filtered)
             if summary_html:
-                # NÚT IN MỞ CỬA SỔ RIÊNG ĐỂ IN CHUẨN ĐÚNG 1 TRANG
                 components.html(
                     """
                     <div style="margin-bottom: 10px;">
                         <button onclick="
-                            var pWin = window.open('', '', 'width=900,height=650');
+                            var pWin = window.open('', '', 'width=950,height=650');
                             var tableHtml = window.parent.document.getElementById('table-to-print').outerHTML;
                             pWin.document.write('<html><head><title>In Bảng Dữ Liệu</title>');
                             pWin.document.write('<style>');
@@ -1099,7 +1098,7 @@ def run_management_app():
             else:
                 st.warning("Không có dữ liệu để tạo phiếu tổng hợp.")
             st.markdown("---")
-
+            
         if not df_filtered.empty:
             html_table = render_management_html_table(df_filtered)
             st.markdown(
