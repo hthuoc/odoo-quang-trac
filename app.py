@@ -893,41 +893,20 @@ def generate_summary_print_table(df_filtered):
     df_summary = pd.DataFrame(summary_data)
 
     html_lines = []
-    # Thêm class printable-summary để nhận diện duy nhất khu vực này khi in
-    html_lines.append('<div id="print-area" class="printable-summary">')
-    
-    # NÚT IN ĐẶT TRỰC TIẾP TRÊN ĐẦU BẢNG (Dùng JS ẩn trang chính, in khu vực này rồi khôi phục)
-    html_lines.append('''
-    <div class="no-print-btn-container" style="margin-bottom: 15px;">
-        <button onclick="
-            var printArea = document.getElementById('print-area');
-            var body = document.body;
-            var originalStyle = printArea.style.cssText;
-            
-            document.querySelectorAll('body > div:not(#root), #root > div:not(.element-container)').forEach(function(el) {
-                el.classList.add('hide-for-print');
-            });
-            
-            window.print();
-        " style="background-color: #2563EB; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;">
-            🖨️ In / Xuất PDF Phiếu Tổng Hợp
-        </button>
-    </div>
-    ''')
-
+    html_lines.append('<div id="print-area">')
     html_lines.append('<style>')
-    html_lines.append('  .summary-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif; font-size: 13px; }')
-    html_lines.append('  .summary-table th, .summary-table td { border: 1px solid #1A202C; padding: 6px 10px; text-align: left; vertical-align: middle; word-wrap: break-word; }')
+    html_lines.append('  .summary-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif; font-size: 13px; table-layout: fixed; }')
+    html_lines.append('  .summary-table th, .summary-table td { border: 1px solid #1A202C; padding: 6px 10px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }')
     html_lines.append('  .summary-table th { background-color: #EDF2F7; font-weight: bold; }')
     html_lines.append('  .summary-table tr:nth-child(even) { background-color: #F8FAFC; }')
     
-    # CSS CHUẨN KHI BẤM XUẤT PRINT
     html_lines.append('  @media print {')
     html_lines.append('      @page { size: A4 portrait; margin: 12mm 10mm; }')
-    html_lines.append('      header, footer, .no-print-btn-container, [data-testid="stHeader"], [data-testid="stSidebar"], .stButton, .stCheckbox { display: none !important; }')
-    html_lines.append('      .printable-summary { display: block !important; visibility: visible !important; width: 100% !important; position: absolute !important; left: 0 !important; top: 0 !important; margin: 0 !important; padding: 0 !important; }')
-    html_lines.append('      .summary-table { page-break-inside: auto; }')
-    html_lines.append('      .summary-table tr { page-break-inside: avoid; page-break-after: auto; }')
+    html_lines.append('      body * { visibility: hidden !important; }')
+    html_lines.append('      #print-area, #print-area * { visibility: visible !important; display: table !important; }')
+    html_lines.append('      #print-area tr { display: table-row !important; }')
+    html_lines.append('      #print-area th, #print-area td { display: table-cell !important; }')
+    html_lines.append('      #print-area { position: absolute !important; left: 0 !important; top: 0 !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }')
     html_lines.append('  }')
     html_lines.append('</style>')
 
@@ -1110,7 +1089,18 @@ def run_management_app():
             st.markdown("---")
             summary_html = generate_summary_print_table(df_filtered)
             if summary_html:
-                # Render trực tiếp cả nút in lẫn bảng vào giao diện chính
+                # 1. Đặt nút in lên trên bằng components.html an toàn tuyệt đối
+                components.html(
+                    """
+                    <div style="margin-bottom: 10px;">
+                        <button onclick="window.parent.print()" style="background-color: #2563EB; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer;">
+                            🖨️ In / Xuất PDF Phiếu Tổng Hợp
+                        </button>
+                    </div>
+                    """,
+                    height=55
+                )
+                # 2. Hiển thị bảng dữ liệu đẹp mắt bên dưới
                 st.markdown(summary_html, unsafe_allow_html=True)
             else:
                 st.warning("Không có dữ liệu để tạo phiếu tổng hợp.")
