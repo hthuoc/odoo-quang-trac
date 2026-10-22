@@ -1073,7 +1073,7 @@ def run_management_app():
         st.markdown("---")
         summary_html = generate_summary_print_table(df_filtered)
         if summary_html:
-            # TIÊM CSS IN VÀO TRANG CHA + NÚT IN AN TOÀN
+            # 1. TIÊM CSS IN VÀO HEAD CỦA TRANG + NÚT IN
             components.html(
                 """
                 <script>
@@ -1116,12 +1116,11 @@ def run_management_app():
                 height=55
             )
 
-            # HIỂN THỊ BẢNG PHIẾU TỔNG HỢP ĐẸP MẮT
+            # 2. HIỂN THỊ BẢNG PHIẾU TỔNG HỢP
             st.markdown(summary_html, unsafe_allow_html=True)
         else:
             st.warning("Không có dữ liệu để tạo phiếu tổng hợp.")
         st.markdown("---")
-
         if not df_filtered.empty:
             html_table = render_management_html_table(df_filtered)
             st.markdown(
