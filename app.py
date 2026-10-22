@@ -775,7 +775,6 @@ def get_short_work_name(work_str, method_str=""):
             return 'BeoTrans'
         elif 'mạch trung bình' in w_lower or 'mct' in w_lower:
             return 'MCT'
-        # Chỉ ghi 'ab' khi Testing method là AOAC 996.06
         elif '996.06' in m_str.lower():
             return 'ab'
         else:
