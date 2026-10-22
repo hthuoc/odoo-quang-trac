@@ -757,11 +757,11 @@ def get_short_work_name(work_str, method_str=""):
             return 'Carbo(*)'
         else:
             return 'Carbo'
-   # Nhóm Chất béo, Axit béo, Omega
-    if any(k in w_lower for k in ['chất béo', 'axit béo', 'acid béo', 'omega', 'omg']):
-        if 'bão hòa đơn' in w_lower or 'mufa' in w_lower:
+   # 5. Nhóm Chất béo, Axit béo, Omega (Ưu tiên 996.06 và các loại béo đặc thù lên đầu)
+    if '996.06' in m_str.lower() or any(k in w_lower for k in ['chất béo', 'béo', 'axit béo', 'acid béo', 'omega', 'omg']):
+        if 'bão hòa đơn' in w_lower or 'không bão hòa đơn' in w_lower or 'mufa' in w_lower:
             return 'MUFA'
-        elif 'bão hòa đa' in w_lower or 'pufa' in w_lower:
+        elif 'bão hòa đa' in w_lower or 'không bão hòa đa' in w_lower or 'pufa' in w_lower:
             return 'PUFA'
         elif 'bão hòa' in w_lower:
             return 'BeoBH'
@@ -779,8 +779,14 @@ def get_short_work_name(work_str, method_str=""):
             return 'Omg6'
         elif 'omega 9' in w_lower or 'omg 9' in w_lower:
             return 'Omg9'
-        else:
+        elif 'hàm lượng chất béo' in w_lower or w_lower == 'chất béo':
             return 'Beo'
+        else:
+            # Nếu có chữ béo/axit béo khác mà không thuộc nhóm trên
+            if '996.06' in m_str.lower():
+                return 'ab'
+            cleaned = re.sub(r'^(hàm lượng|ham luong)\s*', '', w, flags=re.IGNORECASE)
+            return cleaned.strip()
             
     # 6. Đường
     if 'đường tổng số' in w_lower:
