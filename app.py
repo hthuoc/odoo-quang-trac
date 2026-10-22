@@ -338,6 +338,33 @@ def render_lookup_html_table(df):
     html_lines.append('</tbody></table>')
     return "".join(html_lines)
 
+def run_lookup_app():
+    st.subheader("🔍 Tra cứu Mã Quang Trắc")
+    
+    col_input, col_btn = st.columns([4, 1])
+    with col_input:
+        query_code = st.text_input("Nhập Mã quang trắc cần tra cứu:", placeholder="Ví dụ: TPTN2602", label_visibility="collapsed")
+    with col_btn:
+        search_pressed = st.button("Tra cứu", use_container_width=True, type="primary")
+
+    if search_pressed and query_code:
+        with st.spinner("Đang truy vấn dữ liệu từ Odoo..."):
+            df_lookup = fetch_lookup_data_from_odoo(query_code)
+            st.session_state['lookup_df'] = df_lookup
+            st.session_state['lookup_query'] = query_code
+
+    if 'lookup_df' in st.session_state and st.session_state.get('lookup_query'):
+        df_lookup = st.session_state['lookup_df']
+        if not df_lookup.empty:
+            st.success(f"Tìm thấy {len(df_lookup)} bản ghi cho từ khóa: **{st.session_state['lookup_query']}**")
+            html_lookup_table = render_lookup_html_table(df_lookup)
+            st.markdown(
+                f'<div style="overflow-x: auto; width: 100%;" translate="no">{html_lookup_table}</div>', 
+                unsafe_allow_html=True
+            )
+        else:
+            st.warning(f"Không tìm thấy dữ liệu nào cho mã quang trắc: **{st.session_state['lookup_query']}**")
+
 
 # ===================================================================
 # 3. CHỨC NĂNG 2: QUẢN LÝ & TRÍCH XUẤT PHIẾU TỔNG HỢP RÚT GỌN
@@ -705,7 +732,7 @@ def render_management_html_table(df):
 
 
 # ===================================================================
-# LOGIC RÚT GỌN CÔNG VIỆC CHUẨN THEO PHẢN HỒI MỚI NHẤT
+# LOGIC RÚT GỌN CÔNG VIỆC CHUẨN
 # ===================================================================
 def get_short_method_name(method_str):
     """Lấy ngắn gọn tên phương pháp thử nghiệm"""
@@ -757,7 +784,8 @@ def get_short_work_name(work_str, method_str=""):
             return 'Carbo(*)'
         else:
             return 'Carbo'
-   # 5. Nhóm Chất béo, Axit béo, Omega
+            
+    # 5. Nhóm Chất béo, Axit béo, Omega
     if '996.06' in m_str.lower() or any(k in w_lower for k in ['chất béo', 'béo', 'axit béo', 'acid béo', 'omega', 'omg']):
         if 'bão hòa đơn' in w_lower or 'mufa' in w_lower:
             return 'MUFA'
@@ -839,7 +867,7 @@ def get_short_work_name(work_str, method_str=""):
     return cleaned.strip()
 
 def generate_summary_print_table(df_filtered):
-    """Trích xuất bảng dữ liệu Mã quang trắc - Công việc rút gọn chuẩn in A4"""
+    """Trích xuất bảng dữ liệu Mã quang trắc - Công việc rút gọn chuẩn in A4 ngang"""
     if df_filtered.empty or 'Mã quang trắc' not in df_filtered.columns:
         return ""
 
@@ -900,11 +928,10 @@ def generate_summary_print_table(df_filtered):
     html_lines.append('  .summary-table tr:nth-child(even) { background-color: #F8FAFC; }')
     html_lines.append('</style>')
 
-    # ĐIỀU CHỈNH ĐỘ RỘNG CỘT & ĐỔI TÊN TIÊU ĐỀ THÀNH "Công việc"
     html_lines.append('<table id="table-to-print" class="summary-table"><thead><tr>')
-    html_lines.append('<th style="width: 45px; text-align: center;">STT</th>')
-    html_lines.append('<th style="width: 150px;">Mã quang trắc</th>')
-    html_lines.append('<th style="width: 400px;">Mẫu</th>')
+    html_lines.append('<th style="width: 50px; text-align: center;">STT</th>')
+    html_lines.append('<th style="width: 160px;">Mã quang trắc</th>')
+    html_lines.append('<th style="width: 350px;">Mẫu</th>')
     html_lines.append('<th>Công việc</th>')
     html_lines.append('</tr></thead><tbody>')
 
@@ -981,7 +1008,6 @@ def run_management_app():
                 ~df_filtered['Công việc'].astype(str).str.strip().str.lower().str.startswith('năng lượng')
             ].copy()
 
-        # BỘ LỌC CỰC NHANH TRÊN MEMORY RAM
         with st.container():
             col1, col2, col3, col4, col5, col6 = st.columns(6)
 
@@ -1070,7 +1096,6 @@ def run_management_app():
 
         df_filtered['Trạng thái hạn'] = df_filtered.apply(update_status_circle, axis=1)
 
-        # THANH CÔNG CỤ XUẤT / IN PHIẾU TỔNG HỢP
         col_summary_btn, _ = st.columns([3, 9])
         with col_summary_btn:
             show_print_view = st.checkbox("📄 Hiển thị Phiếu tổng hợp để in", value=False)
@@ -1087,13 +1112,12 @@ def run_management_app():
                             var tableHtml = window.parent.document.getElementById('table-to-print').outerHTML;
                             pWin.document.write('<html><head><title>In Bảng Dữ Liệu</title>');
                             pWin.document.write('<style>');
-                            pWin.document.write('@page { size: A4 landscape; margin: 10mm; }'); /* Đổi sang in ngang */
+                            pWin.document.write('@page { size: A4 landscape; margin: 10mm; }');
                             pWin.document.write('body { margin: 0; padding: 0; font-family: sans-serif; }');
                             pWin.document.write('.summary-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }');
                             pWin.document.write('.summary-table th, .summary-table td { border: 1px solid #1A202C; padding: 6px 10px; text-align: left; vertical-align: middle; word-wrap: break-word; }');
                             pWin.document.write('.summary-table th { background-color: #EDF2F7; font-weight: bold; }');
                             pWin.document.write('.summary-table tr:nth-child(even) { background-color: #F8FAFC; }');
-                            /* Tăng độ rộng cột Công việc khi in ngang */
                             pWin.document.write('.summary-table th:nth-child(1), .summary-table td:nth-child(1) { width: 50px; text-align: center; }');
                             pWin.document.write('.summary-table th:nth-child(2), .summary-table td:nth-child(2) { width: 160px; }');
                             pWin.document.write('.summary-table th:nth-child(3), .summary-table td:nth-child(3) { width: 350px; }');
