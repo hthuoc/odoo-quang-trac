@@ -839,7 +839,7 @@ def get_short_work_name(work_str, method_str=""):
     return cleaned.strip()
 
 def generate_summary_print_table(df_filtered):
-    """Trích xuất bảng dữ liệu Mã quang trắc - Công việc rút gọn chuẩn khổ in A4"""
+    """Trích xuất bảng dữ liệu Mã quang trắc - Công việc rút gọn"""
     if df_filtered.empty or 'Mã quang trắc' not in df_filtered.columns:
         return ""
 
@@ -848,6 +848,8 @@ def generate_summary_print_table(df_filtered):
 
     for code, group in grouped:
         works_in_code = []
+        
+        # Đếm tần suất các tên rút gọn trong cùng 1 mã để xử lý trùng
         short_names_count = {}
         row_short_map = []
 
@@ -864,9 +866,11 @@ def generate_summary_print_table(df_filtered):
             row_short_map.append((s_name, m_name))
 
         for s_name, m_name in row_short_map:
+            # Nếu trùng tên Độ ẩm (Am) trong cùng mã -> Ghép thêm đuôi mã số dính liền với :
             if s_name == 'Am' and short_names_count.get('Am', 0) > 1:
                 m_short = get_short_method_name(m_name)
                 final_work_str = f"Am{m_short}"
+            # Nếu các tên khác trùng nhau mà chưa ghép đuôi
             elif short_names_count.get(s_name, 0) > 1 and not any(s_name.startswith(p) for p in ['Pro', 'Am', 'ab']):
                 m_short = get_short_method_name(m_name)
                 final_work_str = f"{s_name}{m_short}"
@@ -878,6 +882,7 @@ def generate_summary_print_table(df_filtered):
         if not works_in_code:
             continue
 
+        # Giữ thứ tự và loại bỏ trùng lặp công việc
         combined_works = ", ".join(dict.fromkeys(works_in_code))
         sample_name = group.iloc[0].get('Mẫu', '')
         
@@ -893,25 +898,41 @@ def generate_summary_print_table(df_filtered):
     df_summary = pd.DataFrame(summary_data)
 
     html_lines = []
-    html_lines.append('<h3>📋 PHIẾU TỔNG HỢP MÃ QUANG TRẮC & CÔNG VIỆC RÚT GỌN</h3>')
-    html_lines.append('<table style="width:100%; border-collapse:collapse; font-size:13px; font-family:sans-serif;"><thead><tr style="background-color:#EDF2F7;">')
-    html_lines.append('<th style="border:1px solid #1A202C; padding:6px; width:45px; text-align:center;">STT</th>')
-    html_lines.append('<th style="border:1px solid #1A202C; padding:6px; width:160px;">Mã quang trắc</th>')
-    html_lines.append('<th style="border:1px solid #1A202C; padding:6px;">Mẫu</th>')
-    html_lines.append('<th style="border:1px solid #1A202C; padding:6px; width:150px;">Công việc rút gọn</th>')
+    html_lines.append('<div id="print-area">')
+    html_lines.append('<style>')
+    html_lines.append('  .summary-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: sans-serif; font-size: 14px; }')
+    html_lines.append('  .summary-table th, .summary-table td { border: 1px solid #1A202C; padding: 8px 12px; text-align: left; }')
+    html_lines.append('  .summary-table th { background-color: #EDF2F7; font-weight: bold; }')
+    html_lines.append('  .summary-table tr:nth-child(even) { background-color: #F8FAFC; }')
+    html_lines.append('  @media print {')
+    html_lines.append('      body * { visibility: hidden; }')
+    html_lines.append('      #print-area, #print-area * { visibility: visible; }')
+    html_lines.append('      #print-area { position: absolute; left: 0; top: 0; width: 100%; }')
+    html_lines.append('      .no-print { display: none !important; }')
+    html_lines.append('  }')
+    html_lines.append('</style>')
+
+    html_lines.append('<h4>📋 PHIẾU TỔNG HỢP MÃ QUANG TRẮC & CÔNG VIỆC RÚT GỌN</h4>')
+    html_lines.append('<table class="summary-table"><thead><tr>')
+    html_lines.append('<th style="width: 50px; text-align: center;">STT</th>')
+    html_lines.append('<th style="width: 180px;">Mã quang trắc</th>')
+    html_lines.append('<th>Mẫu</th>')
+    html_lines.append('<th>Công việc rút gọn</th>')
     html_lines.append('</tr></thead><tbody>')
 
     for idx, row in df_summary.iterrows():
-        bg = '#F8FAFC' if idx % 2 == 1 else '#FFFFFF'
-        html_lines.append(f'<tr style="background-color:{bg};">')
-        html_lines.append(f'<td style="border:1px solid #1A202C; padding:6px; text-align:center;">{idx + 1}</td>')
-        html_lines.append(f'<td style="border:1px solid #1A202C; padding:6px;"><b>{row["Mã quang trắc"]}</b></td>')
-        html_lines.append(f'<td style="border:1px solid #1A202C; padding:6px;">{row["Mẫu"]}</td>')
-        html_lines.append(f'<td style="border:1px solid #1A202C; padding:6px;"><b>{row["Công việc (Rút gọn)"]}</b></td>')
+        html_lines.append('<tr>')
+        html_lines.append(f'<td style="text-align: center;">{idx + 1}</td>')
+        html_lines.append(f'<td><b>{row["Mã quang trắc"]}</b></td>')
+        html_lines.append(f'<td>{row["Mẫu"]}</td>')
+        html_lines.append(f'<td><b>{row["Công việc (Rút gọn)"]}</b></td>')
         html_lines.append('</tr>')
 
     html_lines.append('</tbody></table>')
+    html_lines.append('</div>')
+    
     return "".join(html_lines)
+
 
 def run_management_app():
     col_title, col_reload = st.columns([8, 2])
@@ -1062,31 +1083,28 @@ def run_management_app():
 
         df_filtered['Trạng thái hạn'] = df_filtered.apply(update_status_circle, axis=1)
 
-     # THANH CÔNG CỤ XUẤT / IN PHIẾU TỔNG HỢP
-    col_summary_btn, _ = st.columns([3, 9])
-    with col_summary_btn:
-        show_print_view = st.checkbox("📄 Hiển thị Phiếu tổng hợp để in", value=False)
+        # THANH CÔNG CỤ XUẤT / IN PHIẾU TỔNG HỢP
+        col_summary_btn, _ = st.columns([3, 9])
+        with col_summary_btn:
+            show_print_view = st.checkbox("📄 Hiển thị Phiếu tổng hợp để in", value=False)
 
-    if show_print_view:
-        st.markdown("---")
-        summary_html = generate_summary_print_table(df_filtered)
-        if summary_html:
-            # NÚT IN NẰM TRÊN ĐẦU BẢNG
-            components.html(
-                """
-                <div style="margin-bottom: 10px;">
-                    <button onclick="window.parent.print()" style="background-color: #2563EB; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer;">
+        if show_print_view:
+            st.markdown("---")
+            summary_html = generate_summary_print_table(df_filtered)
+            if summary_html:
+                st.markdown(summary_html, unsafe_allow_html=True)
+                components.html(
+                    """
+                    <button onclick="window.print()" style="background-color: #2563EB; color: white; border: none; padding: 8px 16px; border-radius: 6px; font-weight: bold; cursor: pointer; margin-top: 10px;">
                         🖨️ In / Xuất PDF Phiếu Tổng Hợp
                     </button>
-                </div>
-                """,
-                height=50
-            )
-            st.markdown(summary_html, unsafe_allow_html=True)
-        else:
-            st.warning("Không có dữ liệu để tạo phiếu tổng hợp.")
-        st.markdown("---")
-        
+                    """,
+                    height=60
+                )
+            else:
+                st.warning("Không có dữ liệu để tạo phiếu tổng hợp.")
+            st.markdown("---")
+
         if not df_filtered.empty:
             html_table = render_management_html_table(df_filtered)
             st.markdown(
