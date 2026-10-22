@@ -761,9 +761,13 @@ def get_short_work_name(work_str, method_str=""):
             return 'Carbo(*)'
         else:
             return 'Carbo'
-    # 5. Chất béo
-    if 'hàm lượng chất béo' in w_lower or 'chất béo' in w_lower:
-        if 'bão hòa' in w_lower:
+   # 5. Chất béo
+    if 'hàm lượng chất béo' in w_lower or 'chất béo' in w_lower or 'axit béo' in w_lower or 'acid béo' in w_lower:
+        if 'bão hòa đơn' in w_lower or 'mufa' in w_lower:
+            return 'MUFA'
+        elif 'bão hòa đa' in w_lower or 'pufa' in w_lower:
+            return 'PUFA'
+        elif 'bão hòa' in w_lower:
             return 'BeoBH'
         elif 'vắt mì' in w_lower:
             return 'BeoVat'
@@ -771,10 +775,9 @@ def get_short_work_name(work_str, method_str=""):
             return 'BeoTrans'
         elif 'mạch trung bình' in w_lower or 'mct' in w_lower:
             return 'MCT'
-        elif 'không bão hòa đa' in w_lower or 'pufa' in w_lower:
-            return 'PUFA'
-        elif 'không bão hòa đơn' in w_lower or 'mufa' in w_lower:
-            return 'MUFA'
+        # Chỉ ghi 'ab' khi Testing method là AOAC 996.06
+        elif '996.06' in m_str.lower():
+            return 'ab'
         else:
             return 'Beo'
 
