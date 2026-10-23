@@ -261,7 +261,7 @@ def render_lookup_html_table(df):
     if df.empty:
         return ""
 
-    cols_order = ['Ngày phân công', 'Thời hạn', 'Mã quang trắc', 'Công việc', 'Testing method', 'ĐVT', 'Ghi chú', 'Kết quả', 'Trạng thái']
+    cols_order = ['Ngày phân công', 'Thời hạn', 'Mẫu', 'Mã quang trắc', 'Công việc', 'Testing method', 'ĐVT', 'Ghi chú', 'Kết quả', 'Trạng thái']
     existing_cols = [c for c in cols_order if c in df.columns]
     df = df[existing_cols].fillna('')
 
@@ -270,10 +270,29 @@ def render_lookup_html_table(df):
     else:
         df['_base_code'] = ''
 
+    # ===================================================================
+    # KHAI BÁO ĐỘ RỘNG MONG PHÙ HỢP CHO TỪNG CỘT (Có thể điều chỉnh pixel)
+    # (Translation: Column width definitions)
+    # ===================================================================
+    col_widths = {
+        'Ngày phân công': '100px',
+        'Thời hạn': '100px',
+        'Mẫu': '180px',            # Đã giảm độ rộng cột Mẫu lại (chữ dài sẽ tự xuống dòng)
+        'Mã quang trắc': '160px',
+        'Công việc': '230px',      # Tăng độ rộng cột Công việc
+        'Testing method': '250px', # Tăng độ rộng cột Testing method
+        'ĐVT': '70px',
+        'Ghi chú': '110px',
+        'Kết quả': '100px',
+        'Trạng thái': '110px'
+    }
+
     html_lines = []
     html_lines.append('<style>')
-    html_lines.append('  .custom-table-lookup { width: 100%; border-collapse: collapse; margin-top: 15px; font-family: sans-serif; font-size: 14px; }')
-    html_lines.append('  .custom-table-lookup th, .custom-table-lookup td { border: 1px solid #D3D3D3; padding: 8px 12px; text-align: left; vertical-align: middle; }')
+    # table-layout: fixed giúp ép kích thước các cột theo đúng cấu hình px ở trên
+    html_lines.append('  .custom-table-lookup { width: 100%; border-collapse: collapse; margin-top: 15px; font-family: sans-serif; font-size: 14px; table-layout: fixed; }')
+    # word-wrap và overflow-wrap giúp chữ dài trong cột Mẫu tự ngắt dòng
+    html_lines.append('  .custom-table-lookup th, .custom-table-lookup td { border: 1px solid #D3D3D3; padding: 8px 12px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }')
     html_lines.append('  .custom-table-lookup th { background-color: #F0F2F6; color: #1F2937; font-weight: bold; }')
     html_lines.append('  .custom-table-lookup tr:nth-child(even) { background-color: #FAFAFA; }')
     html_lines.append('  .code-group-border { border-bottom: 3px solid #000000 !important; }')
@@ -281,10 +300,13 @@ def render_lookup_html_table(df):
 
     html_lines.append('<table class="custom-table-lookup"><thead><tr>')
     for col in existing_cols:
-        html_lines.append(f'<th>{col}</th>')
+        # Gán style width trực tiếp vào thẻ th
+        width_style = f' style="width: {col_widths.get(col, "auto")};"'
+        html_lines.append(f'<th{width_style}>{col}</th>')
     html_lines.append('</tr></thead><tbody>')
 
     main_merge_cols = [c for c in ['Ngày phân công', 'Thời hạn'] if c in existing_cols]
+    code_merge_cols = [c for c in ['Mẫu', 'Mã quang trắc'] if c in existing_cols]
 
     n = len(df)
     i = 0
@@ -304,6 +326,7 @@ def render_lookup_html_table(df):
             for r in range(sub_i, sub_j):
                 html_lines.append('<tr>')
                 is_last_row_of_code = (r == sub_j - 1)
+                border_class = ' class="code-group-border"' if is_last_row_of_code else ''
 
                 for col in existing_cols:
                     val = str(df.iloc[r][col])
@@ -311,11 +334,10 @@ def render_lookup_html_table(df):
                     if col in main_merge_cols:
                         if r == i:
                             html_lines.append(f'<td rowspan="{base_rowspan}">{val}</td>')
-                    elif col == 'Mã quang trắc':
+                    elif col in code_merge_cols:
                         if r == sub_i:
-                            html_lines.append(f'<td rowspan="{code_rowspan}" class="code-group-border">{val}</td>')
+                            html_lines.append(f'<td rowspan="{code_rowspan}"{border_class}>{val}</td>')
                     else:
-                        border_class = ' class="code-group-border"' if is_last_row_of_code else ''
                         html_lines.append(f'<td{border_class}>{val}</td>')
                 html_lines.append('</tr>')
 
