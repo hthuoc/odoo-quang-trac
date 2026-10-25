@@ -699,7 +699,7 @@ def render_management_html_table(df):
         'Testing method': '220px',
         'ĐVT': '70px',
         'Ghi chú': '100px',
-        'Thao tác': '90px'
+        'Thao tác': '120px'
     }
 
     html_lines = []
@@ -768,9 +768,22 @@ def render_management_html_table(df):
                         html_lines.append(f'<td class="{bg_class}{top_border_cls}">{val}</td>')
 
                 top_border_cls = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if (r == curr and curr > i) else '')
+                
+                # KIỂM TRA ĐỂ HIỂN THỊ BIỂU TƯỢNG CẢNH BÁO HẸN LẠI
+                is_due_flag = row_raw.get('_is_reschedule_due', False)
+                has_reschedule = (row_raw.get('_code_reschedule') is not None) or (row_raw.get('_job_reschedule') is not None)
+                
+                warning_icon = ""
+                if is_due_flag:
+                    warning_icon = '<span title="Đã đến hạn hẹn lại!" style="font-size: 16px; margin-right: 6px; cursor: help;">⚠️</span>'
+                elif has_reschedule:
+                    warning_icon = '<span title="Đã được hẹn lại thời hạn" style="font-size: 16px; margin-right: 6px; cursor: help;">⏰</span>'
+
                 btn_url = f"?ignore_job_id={job_id}"
                 btn_html = f'<a href="{btn_url}" target="_self" onclick="return confirm(\'Có muốn bỏ qua công việc này?\');" style="text-decoration:none;"><button class="btn-ignore">🚫 Bỏ qua</button></a>'
-                html_lines.append(f'<td class="{bg_class}{top_border_cls}" style="text-align: center;">{btn_html}</td>')
+                
+                cell_action_content = f'<div style="display: flex; align-items: center; justify-content: center; gap: 4px;">{warning_icon}{btn_html}</div>'
+                html_lines.append(f'<td class="{bg_class}{top_border_cls}" style="text-align: center;">{cell_action_content}</td>')
 
                 html_lines.append('</tr>')
             curr = k
