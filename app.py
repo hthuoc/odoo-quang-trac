@@ -417,7 +417,6 @@ def run_lookup_app():
         else:
             st.info("Không tìm thấy dữ liệu phù hợp.")
 
-
 # ===================================================================
 # 3. CHỨC NĂNG 2: QUẢN LÝ & TRÍCH XUẤT PHIẾU TỔNG HỢP RÚT GỌN
 # ===================================================================
@@ -1007,25 +1006,24 @@ def run_management_app():
             del st.query_params["ignore_job_id"]
         st.rerun()
 
-    # ===================================================================
-    # XỬ LÝ HẸN LẠI & CẢNH BÁO ĐẾN HẠN
-    # ===================================================================
-    res_data = load_reschedule_data()
-    now_dt = datetime.now()
-
+    # -------------------------------------------------------------------
+    # KIỂM TRA VÀ HIỂN THỊ KHUNG XÁC NHẬN CẢNH BÁO ĐẾN HẠN Ở PHÍA TRÊN
+    # -------------------------------------------------------------------
+    res_data_check = load_reschedule_data()
+    now_dt_check = datetime.now()
     due_codes_list = []
     due_jobs_list = []
 
-    for c_k, c_inf in res_data.get("codes", {}).items():
+    for c_k, c_inf in res_data_check.get("codes", {}).items():
         if not c_inf.get("ack", False):
             res_dt = parse_reschedule_dt(c_inf["rescheduled_deadline"])
-            if res_dt and now_dt >= res_dt:
+            if res_dt and now_dt_check >= res_dt:
                 due_codes_list.append(c_k)
 
-    for j_k, j_inf in res_data.get("jobs", {}).items():
+    for j_k, j_inf in res_data_check.get("jobs", {}).items():
         if not j_inf.get("ack", False):
             res_dt = parse_reschedule_dt(j_inf["rescheduled_deadline"])
-            if res_dt and now_dt >= res_dt:
+            if res_dt and now_dt_check >= res_dt:
                 due_jobs_list.append(j_k)
 
     if due_codes_list or due_jobs_list:
@@ -1066,11 +1064,16 @@ def run_management_app():
             <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background-color:#38A169; margin-right:6px; flex-shrink:0;"></span>
             <b>Màu xanh lá:</b>&nbsp;Còn hạn
         </div>
+        <div style="display: inline-flex; align-items: center; white-space: nowrap;">
+            <span style="font-size:16px; margin-right:4px;">⚠️</span>
+            <b>Cảnh báo đến hạn:</b>&nbsp;Bấm nút xác nhận ở trên để ẩn
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
+    # DỮ LIỆU ĐƯỢC CACHE VÀO SESSION STATE ĐỂ TRÁNH GỌI LẠI ODOO KHI DÙNG BỘ LỌC HOẶC HẸN GIỜ
     if 'mgmt_df_raw' not in st.session_state:
-        with st.spinner("Đang kết nối và tải toàn bộ dữ liệu từ Odoo..."):
+        with st.spinner("Đang kết nối và tải dữ liệu từ Odoo..."):
             st.session_state['mgmt_df_raw'] = fetch_management_data_from_odoo()
 
     df_raw = st.session_state['mgmt_df_raw']
@@ -1091,9 +1094,9 @@ def run_management_app():
                 ~df_filtered['Công việc'].astype(str).str.strip().str.lower().str.startswith('năng lượng')
             ].copy()
 
-        # ===================================================================
-        # KHUNG THAO TÁC HẸN LẠI THỜI HẠN (ĐÃ ĐƯA VÀO ĐÚNG HÀM)
-        # ===================================================================
+        # -------------------------------------------------------------------
+        # KHUNG THAO TÁC HẸN LẠI THỜI HẠN
+        # -------------------------------------------------------------------
         with st.expander("📅 **Chức năng Hẹn Lại Thời Hạn (Lưu nội bộ)**", expanded=False):
             res_mode = st.radio("Chọn phạm vi hẹn lại:", ["Hẹn mã quang trắc", "Hẹn chỉ tiêu"], horizontal=True)
             
@@ -1175,7 +1178,12 @@ def run_management_app():
                     else:
                         st.warning("Vui lòng chọn ít nhất một Công việc.")
 
-        # Áp dụng thời hạn nội bộ vào dữ liệu hiển thị bảng
+        # -------------------------------------------------------------------
+        # ÁP DỤNG THỜI HẠN NỘI BỘ VÀ TÍNH TOÁN BÁO ĐỘNG
+        # -------------------------------------------------------------------
+        res_data = load_reschedule_data()
+        now_dt = datetime.now()
+
         df_filtered['_code_reschedule'] = None
         df_filtered['_job_reschedule'] = None
         df_filtered['_is_reschedule_due'] = False
@@ -1190,6 +1198,12 @@ def run_management_app():
                 res_dt = parse_reschedule_dt(c_info["rescheduled_deadline"])
                 if res_dt:
                     is_due = (now_dt >= res_dt) and (not c_info.get("ack", False))
+                    df_filtered.at[idx, '_code_reschedule'] = {
+                        "original_deadline": c_info["original_deadline"],
+                        "rescheduled_deadline": c_info["rescheduled_deadline"],
+                        "ack": c_info.get("ack", False),
+                        "is_due": is_due
+                    }
                     if is_due:
                         df_filtered.at[idx, '_is_reschedule_due'] = True
                     if not c_info.get("ack", False):
@@ -1200,6 +1214,12 @@ def run_management_app():
                 res_dt = parse_reschedule_dt(j_info["rescheduled_deadline"])
                 if res_dt:
                     is_due = (now_dt >= res_dt) and (not j_info.get("ack", False))
+                    df_filtered.at[idx, '_job_reschedule'] = {
+                        "original_deadline": j_info["original_deadline"],
+                        "rescheduled_deadline": j_info["rescheduled_deadline"],
+                        "ack": j_info.get("ack", False),
+                        "is_due": is_due
+                    }
                     if is_due:
                         df_filtered.at[idx, '_is_reschedule_due'] = True
                     if not j_info.get("ack", False):
