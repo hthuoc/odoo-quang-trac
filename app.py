@@ -699,7 +699,7 @@ def render_management_html_table(df):
         'Testing method': '220px',
         'ĐVT': '70px',
         'Ghi chú': '100px',
-        'Thao tác': '120px'
+        'Thao tác': '90px'
     }
 
     html_lines = []
@@ -713,6 +713,7 @@ def render_management_html_table(df):
     html_lines.append('  .bg-group-1 { background-color: #EDF2F7 !important; }')
     html_lines.append('  .btn-ignore { background-color: #FFF; border: 1px solid #CBD5E0; border-radius: 6px; padding: 6px 10px; cursor: pointer; color: #E53E3E; font-weight: bold; font-size: 13px; }')
     html_lines.append('  .btn-ignore:hover { background-color: #FED7D7; }')
+    html_lines.append('  .res-icon { font-size: 15px; margin-left: 5px; cursor: help; vertical-align: middle; }')
     html_lines.append('</style>')
 
     html_lines.append('<table class="custom-table-mgmt"><thead><tr>')
@@ -749,6 +750,10 @@ def render_management_html_table(df):
                 row_raw = df.iloc[r]
                 job_id = row_raw.get('id')
 
+                # Lấy thông tin hẹn nội bộ
+                c_res = row_raw.get('_code_reschedule')
+                j_res = row_raw.get('_job_reschedule')
+
                 for col in existing_cols:
                     val = str(df.iloc[r][col])
 
@@ -758,32 +763,46 @@ def render_management_html_table(df):
                             root_border = ' top-border-root' if i > 0 else ''
                             html_lines.append(f'<td rowspan="{root_rowspan}" class="{bg_class}{root_border}"{align}>{val}</td>')
 
-                    elif col in ['Mẫu', 'Mã quang trắc']:
+                    elif col == 'Mã quang trắc':
+                        if r == curr:
+                            sub_border = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if curr > i else '')
+                            
+                            # Chèn icon vào ô Mã quang trắc nếu có hẹn mã
+                            icon_html = ""
+                            if c_res:
+                                if c_res.get("is_due"):
+                                    icon_html = f' <span class="res-icon" title="Hẹn mã đã ĐẾN HẠN: {c_res.get("rescheduled_deadline")}">⚠️</span>'
+                                else:
+                                    icon_html = f' <span class="res-icon" title="Đã hẹn mã đến: {c_res.get("rescheduled_deadline")}">⏰</span>'
+                            
+                            html_lines.append(f'<td rowspan="{sub_rowspan}" class="{bg_class}{sub_border}">{val}{icon_html}</td>')
+
+                    elif col == 'Mẫu':
                         if r == curr:
                             sub_border = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if curr > i else '')
                             html_lines.append(f'<td rowspan="{sub_rowspan}" class="{bg_class}{sub_border}">{val}</td>')
+
+                    elif col == 'Công việc':
+                        top_border_cls = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if (r == curr and curr > i) else '')
+                        
+                        # Chèn icon vào ô Công việc (Chỉ tiêu) nếu có hẹn chỉ tiêu
+                        icon_html = ""
+                        if j_res:
+                            if j_res.get("is_due"):
+                                icon_html = f' <span class="res-icon" title="Hẹn chỉ tiêu đã ĐẾN HẠN: {j_res.get("rescheduled_deadline")}">⚠️</span>'
+                            else:
+                                icon_html = f' <span class="res-icon" title="Đã hẹn chỉ tiêu đến: {j_res.get("rescheduled_deadline")}">⏰</span>'
+
+                        html_lines.append(f'<td class="{bg_class}{top_border_cls}">{val}{icon_html}</td>')
 
                     else:
                         top_border_cls = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if (r == curr and curr > i) else '')
                         html_lines.append(f'<td class="{bg_class}{top_border_cls}">{val}</td>')
 
                 top_border_cls = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if (r == curr and curr > i) else '')
-                
-                # KIỂM TRA ĐỂ HIỂN THỊ BIỂU TƯỢNG CẢNH BÁO HẸN LẠI
-                is_due_flag = row_raw.get('_is_reschedule_due', False)
-                has_reschedule = (row_raw.get('_code_reschedule') is not None) or (row_raw.get('_job_reschedule') is not None)
-                
-                warning_icon = ""
-                if is_due_flag:
-                    warning_icon = '<span title="Đã đến hạn hẹn lại!" style="font-size: 16px; margin-right: 6px; cursor: help;">⚠️</span>'
-                elif has_reschedule:
-                    warning_icon = '<span title="Đã được hẹn lại thời hạn" style="font-size: 16px; margin-right: 6px; cursor: help;">⏰</span>'
-
                 btn_url = f"?ignore_job_id={job_id}"
                 btn_html = f'<a href="{btn_url}" target="_self" onclick="return confirm(\'Có muốn bỏ qua công việc này?\');" style="text-decoration:none;"><button class="btn-ignore">🚫 Bỏ qua</button></a>'
-                
-                cell_action_content = f'<div style="display: flex; align-items: center; justify-content: center; gap: 4px;">{warning_icon}{btn_html}</div>'
-                html_lines.append(f'<td class="{bg_class}{top_border_cls}" style="text-align: center;">{cell_action_content}</td>')
+                html_lines.append(f'<td class="{bg_class}{top_border_cls}" style="text-align: center;">{btn_html}</td>')
 
                 html_lines.append('</tr>')
             curr = k
