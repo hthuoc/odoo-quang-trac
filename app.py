@@ -140,29 +140,23 @@ def extract_sample_value(row, active_sample_fields):
 
 
 # ===================================================================
-# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC (BỘ CODE 1)
+# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC (GIỮ NGUYÊN BẢNG TRA CỨU)
 # ===================================================================
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_lookup_data_from_odoo(query_str):
     if not query_str.strip():
         return pd.DataFrame()
     
     max_retries = 3
+    valid_ids = get_odoo_user_and_partner_ids()
+    valid_odoo_fields = get_assign_work_line_fields()
+
     for attempt in range(max_retries):
         try:
-            ctx = ssl._create_unverified_context()  # Tạo ngữ cảnh bỏ qua kiểm tra chứng chỉ (Create context to bypass certificate verification)
+            ctx = ssl._create_unverified_context()
             common = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/common', allow_none=True, context=ctx)
             uid = common.authenticate(ODOO_DB, ODOO_USER, ODOO_PASSWORD, {})
             models = xmlrpc.client.ServerProxy(f'{ODOO_URL}/xmlrpc/2/object', allow_none=True, context=ctx)
-
-            user_ids = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'res.users', 'search', [[['name', 'ilike', 'N Văn Phương']]])
-            partner_ids = models.execute_kw(ODOO_DB, uid, ODOO_PASSWORD, 'res.partner', 'search', [[['name', 'ilike', 'N Văn Phương']]])
-            valid_ids = set(user_ids + partner_ids)
-
-            existing_fields_info = models.execute_kw(
-                ODOO_DB, uid, ODOO_PASSWORD,
-                'assign.work.line', 'fields_get', [], {'attributes': ['string']}
-            )
-            valid_odoo_fields = set(existing_fields_info.keys())
 
             actual_fields_map = {}
             for k, v in FIELDS_MAP.items():
@@ -173,12 +167,16 @@ def fetch_lookup_data_from_odoo(query_str):
                 elif k == 'testing_method_id' and 'test_method_id' in valid_odoo_fields:
                     actual_fields_map['test_method_id'] = v
 
+            LOOKUP_SAMPLE_FIELDS = ['parent_id', 'sample_name', 'sample_id', 'sample', 'product_id', 'sample_description']
+            active_sample_fields = [sf for sf in LOOKUP_SAMPLE_FIELDS if sf in valid_odoo_fields]
+            for sf in active_sample_fields:
+                actual_fields_map[sf] = sf
+
             if 'state' in valid_odoo_fields:
                 actual_fields_map['state'] = 'Trạng thái'
 
             code_field_list = [k for k, v in actual_fields_map.items() if v == 'Mã quang trắc']
             if not code_field_list:
-                st.error("Chưa cấu hình đúng tên kỹ thuật cho 'Mã quang trắc' trong FIELDS_MAP.")
                 return pd.DataFrame()
 
             search_field = code_field_list[0]
@@ -230,8 +228,11 @@ def fetch_lookup_data_from_odoo(query_str):
             if df.empty:
                 return pd.DataFrame()
 
+            df['Mẫu'] = df.apply(lambda r: extract_sample_value(r, active_sample_fields), axis=1)
+
             for col in df.columns:
-                df[col] = df[col].apply(clean_odoo_field_value)
+                if col != 'Mẫu':
+                    df[col] = df[col].apply(clean_odoo_field_value)
 
             state_col = [k for k, v in actual_fields_map.items() if v == 'Trạng thái']
             if state_col and state_col[0] in df.columns:
@@ -249,12 +250,11 @@ def fetch_lookup_data_from_odoo(query_str):
                 df = df.sort_values(by=sort_cols, key=lambda col: col.astype(str)).reset_index(drop=True)
 
             return df
-        except Exception as e:
+        except Exception:
             if attempt < max_retries - 1:
-                time_lib.sleep(2)
+                time_lib.sleep(1)
                 continue
             else:
-                st.error(f"Lỗi kết nối hoặc truy vấn Odoo: {e}")
                 return pd.DataFrame()
 
 def render_lookup_html_table(df):
