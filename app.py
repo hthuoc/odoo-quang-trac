@@ -750,7 +750,6 @@ def render_management_html_table(df):
                 row_raw = df.iloc[r]
                 job_id = row_raw.get('id')
 
-                # Lấy thông tin hẹn nội bộ
                 c_res = row_raw.get('_code_reschedule')
                 j_res = row_raw.get('_job_reschedule')
 
@@ -767,9 +766,9 @@ def render_management_html_table(df):
                         if r == curr:
                             sub_border = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if curr > i else '')
                             
-                            # Chèn icon vào ô Mã quang trắc nếu có hẹn mã
+                            # CHỈ HIỂN THỊ ICON KHI CHƯA XÁC NHẬN (ack == False)
                             icon_html = ""
-                            if c_res:
+                            if c_res and not c_res.get("ack", False):
                                 if c_res.get("is_due"):
                                     icon_html = f' <span class="res-icon" title="Hẹn mã đã ĐẾN HẠN: {c_res.get("rescheduled_deadline")}">⚠️</span>'
                                 else:
@@ -785,9 +784,9 @@ def render_management_html_table(df):
                     elif col == 'Công việc':
                         top_border_cls = ' top-border-root' if (r == i and i > 0) else (' top-border-sub' if (r == curr and curr > i) else '')
                         
-                        # Chèn icon vào ô Công việc (Chỉ tiêu) nếu có hẹn chỉ tiêu
+                        # CHỈ HIỂN THỊ ICON KHI CHƯA XÁC NHẬN (ack == False)
                         icon_html = ""
-                        if j_res:
+                        if j_res and not j_res.get("ack", False):
                             if j_res.get("is_due"):
                                 icon_html = f' <span class="res-icon" title="Hẹn chỉ tiêu đã ĐẾN HẠN: {j_res.get("rescheduled_deadline")}">⚠️</span>'
                             else:
