@@ -193,7 +193,7 @@ def extract_sample_value(row, active_sample_fields):
 
 
 # ===================================================================
-# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC
+# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC (GIỮ NGUYÊN BẢNG TRA CỨU)
 # ===================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_lookup_data_from_odoo(query_str):
@@ -220,6 +220,7 @@ def fetch_lookup_data_from_odoo(query_str):
                 elif k == 'testing_method_id' and 'test_method_id' in valid_odoo_fields:
                     actual_fields_map['test_method_id'] = v
 
+            LOOKUP_SAMPLE_FIELDS = ['parent_id', 'sample_name', 'sample_id', 'sample', 'product_id', 'sample_description']
             active_sample_fields = [sf for sf in LOOKUP_SAMPLE_FIELDS if sf in valid_odoo_fields]
             for sf in active_sample_fields:
                 actual_fields_map[sf] = sf
@@ -322,14 +323,18 @@ def render_lookup_html_table(df):
     else:
         df['_base_code'] = ''
 
+    # ===================================================================
+    # KHAI BÁO ĐỘ RỘNG MONG PHÙ HỢP CHO TỪNG CỘT (Có thể điều chỉnh pixel)
+    # (Translation: Column width definitions)
+    # ===================================================================
     col_widths = {
         'Ngày phân công': '100px',
         'Thời hạn': '100px',
-        'Mẫu': '180px',
+        'Mẫu': '180px',            # Đã giảm độ rộng cột Mẫu lại (chữ dài sẽ tự xuống dòng)
         'Mã quang trắc': '160px',
-        'Công việc': '230px',
-        'Testing method': '200px',
-        'ĐVT': '85px',
+        'Công việc': '230px',      # Tăng độ rộng cột Công việc
+        'Testing method': '250px', # Tăng độ rộng cột Testing method
+        'ĐVT': '70px',
         'Ghi chú': '110px',
         'Kết quả': '100px',
         'Trạng thái': '110px'
@@ -337,7 +342,9 @@ def render_lookup_html_table(df):
 
     html_lines = []
     html_lines.append('<style>')
+    # table-layout: fixed giúp ép kích thước các cột theo đúng cấu hình px ở trên
     html_lines.append('  .custom-table-lookup { width: 100%; border-collapse: collapse; margin-top: 15px; font-family: sans-serif; font-size: 14px; table-layout: fixed; }')
+    # word-wrap và overflow-wrap giúp chữ dài trong cột Mẫu tự ngắt dòng
     html_lines.append('  .custom-table-lookup th, .custom-table-lookup td { border: 1px solid #D3D3D3; padding: 8px 12px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }')
     html_lines.append('  .custom-table-lookup th { background-color: #F0F2F6; color: #1F2937; font-weight: bold; }')
     html_lines.append('  .custom-table-lookup tr:nth-child(even) { background-color: #FAFAFA; }')
@@ -346,6 +353,7 @@ def render_lookup_html_table(df):
 
     html_lines.append('<table class="custom-table-lookup"><thead><tr>')
     for col in existing_cols:
+        # Gán style width trực tiếp vào thẻ th
         width_style = f' style="width: {col_widths.get(col, "auto")};"'
         html_lines.append(f'<th{width_style}>{col}</th>')
     html_lines.append('</tr></thead><tbody>')
@@ -393,31 +401,21 @@ def render_lookup_html_table(df):
     return "".join(html_lines)
 
 def run_lookup_app():
-    st.subheader("🔍 Tra cứu Mã Quang Trắc")
-    
-    col_input, col_btn = st.columns([4, 1])
-    with col_input:
-        query_code = st.text_input("Nhập Mã quang trắc cần tra cứu:", placeholder="Ví dụ: TPTN2602", label_visibility="collapsed")
-    with col_btn:
-        search_pressed = st.button("Tra cứu", use_container_width=True, type="primary")
+    st.subheader("🔍 Tra cứu thông tin Quang Trắc")
+    search_query = st.text_input("Nhập số mã quang cần tìm (nhấn Enter để tìm kiếm):")
 
-    if search_pressed and query_code:
-        with st.spinner("Đang truy vấn dữ liệu từ Odoo..."):
-            df_lookup = fetch_lookup_data_from_odoo(query_code)
-            st.session_state['lookup_df'] = df_lookup
-            st.session_state['lookup_query'] = query_code
-
-    if 'lookup_df' in st.session_state and st.session_state.get('lookup_query'):
-        df_lookup = st.session_state['lookup_df']
-        if not df_lookup.empty:
-            st.success(f"Tìm thấy {len(df_lookup)} bản ghi cho từ khóa: **{st.session_state['lookup_query']}**")
-            html_lookup_table = render_lookup_html_table(df_lookup)
+    if search_query.strip():
+        with st.spinner("Đang tìm kiếm..."):
+            df_result = fetch_lookup_data_from_odoo(search_query)
+        
+        if not df_result.empty:
+            html_table = render_lookup_html_table(df_result)
             st.markdown(
-                f'<div style="overflow-x: auto; width: 100%;" translate="no">{html_lookup_table}</div>', 
+                f'<div style="overflow-x: auto; width: 100%;" translate="no">{html_table}</div>', 
                 unsafe_allow_html=True
             )
         else:
-            st.warning(f"Không tìm thấy dữ liệu nào cho mã quang trắc: **{st.session_state['lookup_query']}**")
+            st.info("Không tìm thấy dữ liệu phù hợp.")
 
 
 # ===================================================================
