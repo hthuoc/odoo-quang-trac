@@ -19,6 +19,7 @@ st.set_page_config(
 )
 
 IGNORED_JOBS_FILE = "ignored_jobs.json"
+RESCHEDULE_FILE = "rescheduled_jobs.json"
 
 def load_ignored_jobs():
     if os.path.exists(IGNORED_JOBS_FILE):
@@ -35,6 +36,58 @@ def save_ignored_job(job_id):
         ignored.append(str(job_id))
         with open(IGNORED_JOBS_FILE, "w", encoding="utf-8") as f:
             json.dump(ignored, f, ensure_ascii=False, indent=2)
+
+# ===================================================================
+# CÁC HÀM XỬ LÝ LƯU TRỮ HẸN LẠI (RESCHEDULE FUNCTIONS)
+# ===================================================================
+def load_reschedule_data():
+    if os.path.exists(RESCHEDULE_FILE):
+        try:
+            with open(RESCHEDULE_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {"codes": {}, "jobs": {}}
+    return {"codes": {}, "jobs": {}}
+
+def save_reschedule_data(data):
+    with open(RESCHEDULE_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+def add_reschedule_code(code, new_deadline_str, original_deadline=""):
+    data = load_reschedule_data()
+    data["codes"][str(code)] = {
+        "original_deadline": str(original_deadline),
+        "rescheduled_deadline": str(new_deadline_str),
+        "ack": False
+    }
+    save_reschedule_data(data)
+
+def add_reschedule_job(job_key, new_deadline_str, original_deadline=""):
+    data = load_reschedule_data()
+    data["jobs"][str(job_key)] = {
+        "original_deadline": str(original_deadline),
+        "rescheduled_deadline": str(new_deadline_str),
+        "ack": False
+    }
+    save_reschedule_data(data)
+
+def ack_reschedule(target_type, target_key):
+    data = load_reschedule_data()
+    if target_type == "code" and str(target_key) in data.get("codes", {}):
+        data["codes"][str(target_key)]["ack"] = True
+    elif target_type == "job" and str(target_key) in data.get("jobs", {}):
+        data["jobs"][str(target_key)]["ack"] = True
+    save_reschedule_data(data)
+
+def parse_reschedule_dt(dt_str):
+    if not dt_str:
+        return None
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y %H:%M:%S", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(str(dt_str).strip(), fmt)
+        except ValueError:
+            continue
+    return None
 
 components.html(
     """
@@ -140,7 +193,7 @@ def extract_sample_value(row, active_sample_fields):
 
 
 # ===================================================================
-# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC (GIỮ NGUYÊN BẢNG TRA CỨU)
+# 2. CHỨC NĂNG 1: TRA CỨU MÃ QUANG TRẮC
 # ===================================================================
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_lookup_data_from_odoo(query_str):
@@ -167,7 +220,6 @@ def fetch_lookup_data_from_odoo(query_str):
                 elif k == 'testing_method_id' and 'test_method_id' in valid_odoo_fields:
                     actual_fields_map['test_method_id'] = v
 
-            LOOKUP_SAMPLE_FIELDS = ['parent_id', 'sample_name', 'sample_id', 'sample', 'product_id', 'sample_description']
             active_sample_fields = [sf for sf in LOOKUP_SAMPLE_FIELDS if sf in valid_odoo_fields]
             for sf in active_sample_fields:
                 actual_fields_map[sf] = sf
@@ -270,18 +322,14 @@ def render_lookup_html_table(df):
     else:
         df['_base_code'] = ''
 
-    # ===================================================================
-    # KHAI BÁO ĐỘ RỘNG MONG PHÙ HỢP CHO TỪNG CỘT (Có thể điều chỉnh pixel)
-    # (Translation: Column width definitions)
-    # ===================================================================
     col_widths = {
         'Ngày phân công': '100px',
         'Thời hạn': '100px',
-        'Mẫu': '180px',            # Đã giảm độ rộng cột Mẫu lại (chữ dài sẽ tự xuống dòng)
+        'Mẫu': '180px',
         'Mã quang trắc': '160px',
-        'Công việc': '230px',      # Tăng độ rộng cột Công việc
-        'Testing method': '250px', # Tăng độ rộng cột Testing method
-        'ĐVT': '70px',
+        'Công việc': '230px',
+        'Testing method': '200px',
+        'ĐVT': '85px',
         'Ghi chú': '110px',
         'Kết quả': '100px',
         'Trạng thái': '110px'
@@ -289,9 +337,7 @@ def render_lookup_html_table(df):
 
     html_lines = []
     html_lines.append('<style>')
-    # table-layout: fixed giúp ép kích thước các cột theo đúng cấu hình px ở trên
     html_lines.append('  .custom-table-lookup { width: 100%; border-collapse: collapse; margin-top: 15px; font-family: sans-serif; font-size: 14px; table-layout: fixed; }')
-    # word-wrap và overflow-wrap giúp chữ dài trong cột Mẫu tự ngắt dòng
     html_lines.append('  .custom-table-lookup th, .custom-table-lookup td { border: 1px solid #D3D3D3; padding: 8px 12px; text-align: left; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }')
     html_lines.append('  .custom-table-lookup th { background-color: #F0F2F6; color: #1F2937; font-weight: bold; }')
     html_lines.append('  .custom-table-lookup tr:nth-child(even) { background-color: #FAFAFA; }')
@@ -300,7 +346,6 @@ def render_lookup_html_table(df):
 
     html_lines.append('<table class="custom-table-lookup"><thead><tr>')
     for col in existing_cols:
-        # Gán style width trực tiếp vào thẻ th
         width_style = f' style="width: {col_widths.get(col, "auto")};"'
         html_lines.append(f'<th{width_style}>{col}</th>')
     html_lines.append('</tr></thead><tbody>')
@@ -348,21 +393,31 @@ def render_lookup_html_table(df):
     return "".join(html_lines)
 
 def run_lookup_app():
-    st.subheader("🔍 Tra cứu thông tin Quang Trắc")
-    search_query = st.text_input("Nhập số mã quang cần tìm (nhấn Enter để tìm kiếm):")
+    st.subheader("🔍 Tra cứu Mã Quang Trắc")
+    
+    col_input, col_btn = st.columns([4, 1])
+    with col_input:
+        query_code = st.text_input("Nhập Mã quang trắc cần tra cứu:", placeholder="Ví dụ: TPTN2602", label_visibility="collapsed")
+    with col_btn:
+        search_pressed = st.button("Tra cứu", use_container_width=True, type="primary")
 
-    if search_query.strip():
-        with st.spinner("Đang tìm kiếm..."):
-            df_result = fetch_lookup_data_from_odoo(search_query)
-        
-        if not df_result.empty:
-            html_table = render_lookup_html_table(df_result)
+    if search_pressed and query_code:
+        with st.spinner("Đang truy vấn dữ liệu từ Odoo..."):
+            df_lookup = fetch_lookup_data_from_odoo(query_code)
+            st.session_state['lookup_df'] = df_lookup
+            st.session_state['lookup_query'] = query_code
+
+    if 'lookup_df' in st.session_state and st.session_state.get('lookup_query'):
+        df_lookup = st.session_state['lookup_df']
+        if not df_lookup.empty:
+            st.success(f"Tìm thấy {len(df_lookup)} bản ghi cho từ khóa: **{st.session_state['lookup_query']}**")
+            html_lookup_table = render_lookup_html_table(df_lookup)
             st.markdown(
-                f'<div style="overflow-x: auto; width: 100%;" translate="no">{html_table}</div>', 
+                f'<div style="overflow-x: auto; width: 100%;" translate="no">{html_lookup_table}</div>', 
                 unsafe_allow_html=True
             )
         else:
-            st.info("Không tìm thấy dữ liệu phù hợp.")
+            st.warning(f"Không tìm thấy dữ liệu nào cho mã quang trắc: **{st.session_state['lookup_query']}**")
 
 
 # ===================================================================
@@ -728,248 +783,12 @@ def render_management_html_table(df):
 
     html_lines.append('</tbody></table>')
     return "".join(html_lines)
-def run_management_app():
-    st.subheader("📊 Quản lý Thời hạn Mã Quang Trắc")
 
-    res_data = load_reschedule_data()
-    now_dt = datetime.now()
-
-    # -------------------------------------------------------------------
-    # KHUNG XÁC NHẬN CẢNH BÁO ĐẾN HẠN
-    # -------------------------------------------------------------------
-    due_codes_list = []
-    due_jobs_list = []
-
-    for c_k, c_inf in res_data.get("codes", {}).items():
-        if not c_inf.get("ack", False):
-            res_dt = parse_reschedule_dt(c_inf["rescheduled_deadline"])
-            if res_dt and now_dt >= res_dt:
-                due_codes_list.append(c_k)
-
-    for j_k, j_inf in res_data.get("jobs", {}).items():
-        if not j_inf.get("ack", False):
-            res_dt = parse_reschedule_dt(j_inf["rescheduled_deadline"])
-            if res_dt and now_dt >= res_dt:
-                due_jobs_list.append(j_k)
-
-    if due_codes_list or due_jobs_list:
-        with st.container():
-            st.info("🔔 **Có các lịch hẹn lại đã đến hạn cần xác nhận đã xem:**")
-            ack_cols = st.columns(3)
-            col_idx = 0
-            for dc in due_codes_list:
-                with ack_cols[col_idx % 3]:
-                    if st.button(f"✔ Đã xem Mã: {dc}", key=f"btn_ack_code_{dc}", type="primary"):
-                        ack_reschedule("code", dc)
-                        st.rerun()
-                col_idx += 1
-            for dj in due_jobs_list:
-                disp_j = dj.replace("__", " - ")
-                with ack_cols[col_idx % 3]:
-                    if st.button(f"✔ Đã xem Chỉ tiêu: {disp_j}", key=f"btn_ack_job_{dj}", type="primary"):
-                        ack_reschedule("job", dj)
-                        st.rerun()
-                col_idx += 1
-        st.markdown("---")
-
-    st.markdown("""
-    <div style="display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; font-size: 14px; margin-bottom: 20px; background-color: #f8f9fa; padding: 12px 16px; border-radius: 6px; border: 1px solid #e9ecef;">
-        <div style="display: inline-flex; align-items: center; white-space: nowrap;">
-            <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background-color:#E53E3E; margin-right:6px; flex-shrink:0;"></span>
-            <b>Màu đỏ:</b>&nbsp;Quá hạn
-        </div>
-        <div style="display: inline-flex; align-items: center; white-space: nowrap;">
-            <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background-color:#D69E2E; margin-right:6px; flex-shrink:0;"></span>
-            <b>Màu vàng:</b>&nbsp;Đến hạn hôm nay
-        </div>
-        <div style="display: inline-flex; align-items: center; white-space: nowrap;">
-            <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background-color:#3182CE; margin-right:6px; flex-shrink:0;"></span>
-            <b>Màu xanh dương:</b>&nbsp;Đến hạn ngày mai
-        </div>
-        <div style="display: inline-flex; align-items: center; white-space: nowrap;">
-            <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background-color:#38A169; margin-right:6px; flex-shrink:0;"></span>
-            <b>Màu xanh lá:</b>&nbsp;Còn hạn
-        </div>
-        <div style="display: inline-flex; align-items: center; white-space: nowrap;">
-            <span style="font-size:16px; margin-right:4px;">⚠️</span>
-            <b>Cảnh báo đến hạn:</b>&nbsp;Bấm nút xác nhận ở trên để ẩn
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    with st.spinner("Đang tải dữ liệu từ Odoo..."):
-        df_raw = fetch_management_data_from_odoo()
-
-    if not df_raw.empty:
-        df_filtered = df_raw.copy()
-
-        if 'Công việc' in df_filtered.columns:
-            df_filtered = df_filtered[
-                ~df_filtered['Công việc'].astype(str).str.strip().str.lower().str.startswith('năng lượng')
-            ].copy()
-
-        # -------------------------------------------------------------------
-        # KHUNG THAO TÁC HẸN LẠI THỜI HẠN
-        # -------------------------------------------------------------------
-        with st.expander("📅 **Chức năng Hẹn Lại Thời Hạn (Lưu nội bộ)**", expanded=False):
-            res_mode = st.radio("Chọn phạm vi hẹn lại:", ["Hẹn mã quang trắc", "Hẹn chỉ tiêu"], horizontal=True)
-            
-            all_available_codes = sorted([c for c in df_filtered['Mã quang trắc'].unique() if c])
-            
-            if res_mode == "Hẹn mã quang trắc":
-                selected_res_codes = st.multiselect("Chọn các Mã quang trắc cần hẹn lại:", options=all_available_codes)
-                
-                default_date = date.today()
-                default_time = time(17, 0)
-                if selected_res_codes:
-                    matched_rows = df_filtered[df_filtered['Mã quang trắc'].isin(selected_res_codes)]
-                    if not matched_rows.empty and 'Thời hạn' in matched_rows.columns:
-                        raw_dl = str(matched_rows['Thời hạn'].iloc[0]).strip()
-                        parsed_dt = parse_reschedule_dt(raw_dl)
-                        if parsed_dt:
-                            default_date = parsed_dt.date()
-                            default_time = parsed_dt.time()
-
-                col_d, col_t = st.columns([2, 1])
-                with col_d:
-                    new_res_date = st.date_input("Chọn Ngày mới:", value=default_date, format="DD/MM/YYYY")
-                with col_t:
-                    new_res_time = st.time_input("Chọn Giờ mới:", value=default_time)
-                
-                if st.button("Áp dụng Hẹn Mã Quang Trắc", type="primary"):
-                    if selected_res_codes and new_res_date and new_res_time:
-                        new_dt_str = f"{new_res_date.strftime('%Y-%m-%d')} {new_res_time.strftime('%H:%M:%S')}"
-                        for sc in selected_res_codes:
-                            orig_d = df_filtered[df_filtered['Mã quang trắc'] == sc]['Thời hạn'].iloc[0] if 'Thời hạn' in df_filtered.columns else ''
-                            add_reschedule_code(sc, new_dt_str, orig_d)
-                        st.success("Đã áp dụng hẹn lại thời hạn thành công!")
-                        st.rerun()
-                    else:
-                        st.warning("Vui lòng chọn ít nhất một Mã quang trắc.")
-            else:
-                job_options = []
-                for idx, r in df_filtered.iterrows():
-                    code_val = str(r.get('Mã quang trắc', '')).strip()
-                    work_val = str(r.get('Công việc', '')).strip()
-                    if code_val and work_val:
-                        job_options.append(f"{code_val} - {work_val}")
-                job_options = sorted(list(set(job_options)))
-                
-                selected_res_jobs = st.multiselect("Chọn các Công việc (Chỉ tiêu) cần hẹn lại:", options=job_options)
-                
-                default_date = date.today()
-                default_time = time(17, 0)
-                if selected_res_jobs:
-                    parts = selected_res_jobs[0].split(" - ", 1)
-                    if len(parts) == 2:
-                        c_part, w_part = parts[0].strip(), parts[1].strip()
-                        matched_rows = df_filtered[(df_filtered['Mã quang trắc'] == c_part) & (df_filtered['Công việc'] == w_part)]
-                        if not matched_rows.empty and 'Thời hạn' in matched_rows.columns:
-                            raw_dl = str(matched_rows['Thời hạn'].iloc[0]).strip()
-                            parsed_dt = parse_reschedule_dt(raw_dl)
-                            if parsed_dt:
-                                default_date = parsed_dt.date()
-                                default_time = parsed_dt.time()
-
-                col_d, col_t = st.columns([2, 1])
-                with col_d:
-                    new_res_date = st.date_input("Chọn Ngày mới:", value=default_date, format="DD/MM/YYYY")
-                with col_t:
-                    new_res_time = st.time_input("Chọn Giờ mới:", value=default_time)
-                
-                if st.button("Áp dụng Hẹn Chỉ Tiêu", type="primary"):
-                    if selected_res_jobs and new_res_date and new_res_time:
-                        new_dt_str = f"{new_res_date.strftime('%Y-%m-%d')} {new_res_time.strftime('%H:%M:%S')}"
-                        for sj in selected_res_jobs:
-                            parts = sj.split(" - ", 1)
-                            if len(parts) == 2:
-                                c_part, w_part = parts[0].strip(), parts[1].strip()
-                                job_key = f"{c_part}__{w_part}"
-                                orig_d = df_filtered[(df_filtered['Mã quang trắc'] == c_part) & (df_filtered['Công việc'] == w_part)]['Thời hạn'].iloc[0] if 'Thời hạn' in df_filtered.columns else ''
-                                add_reschedule_job(job_key, new_dt_str, orig_d)
-                        st.success("Đã áp dụng hẹn lại chỉ tiêu thành công!")
-                        st.rerun()
-                    else:
-                        st.warning("Vui lòng chọn ít nhất một Công việc.")
-
-        # -------------------------------------------------------------------
-        # ÁP DỤNG THỜI HẠN NỘI BỘ VÀ TÍNH TOÁN BÁO ĐỘNG
-        # -------------------------------------------------------------------
-        df_filtered['_code_reschedule'] = None
-        df_filtered['_job_reschedule'] = None
-        df_filtered['_is_reschedule_due'] = False
-
-        for idx, row in df_filtered.iterrows():
-            r_code = str(row.get('Mã quang trắc', '')).strip()
-            r_work = str(row.get('Công việc', '')).strip()
-            j_key = f"{r_code}__{r_work}"
-
-            if r_code in res_data.get("codes", {}):
-                c_info = res_data["codes"][r_code]
-                res_dt = parse_reschedule_dt(c_info["rescheduled_deadline"])
-                if res_dt:
-                    is_due = (now_dt >= res_dt) and (not c_info.get("ack", False))
-                    df_filtered.at[idx, '_code_reschedule'] = {
-                        "original_deadline": c_info["original_deadline"],
-                        "rescheduled_deadline": c_info["rescheduled_deadline"],
-                        "ack": c_info.get("ack", False),
-                        "is_due": is_due
-                    }
-                    if is_due:
-                        df_filtered.at[idx, '_is_reschedule_due'] = True
-                    if not c_info.get("ack", False):
-                        df_filtered.at[idx, 'deadline_dt'] = pd.to_datetime(res_dt)
-
-            if j_key in res_data.get("jobs", {}):
-                j_info = res_data["jobs"][j_key]
-                res_dt = parse_reschedule_dt(j_info["rescheduled_deadline"])
-                if res_dt:
-                    is_due = (now_dt >= res_dt) and (not j_info.get("ack", False))
-                    df_filtered.at[idx, '_job_reschedule'] = {
-                        "original_deadline": j_info["original_deadline"],
-                        "rescheduled_deadline": j_info["rescheduled_deadline"],
-                        "ack": j_info.get("ack", False),
-                        "is_due": is_due
-                    }
-                    if is_due:
-                        df_filtered.at[idx, '_is_reschedule_due'] = True
-                    if not j_info.get("ack", False):
-                        df_filtered.at[idx, 'deadline_dt'] = pd.to_datetime(res_dt)
-
-        df_filtered = df_filtered.sort_values(
-            by=['_is_reschedule_due', 'deadline_dt', 'id'], 
-            ascending=[False, True, True], 
-            na_position='last'
-        ).reset_index(drop=True)
-
-        today_date = date.today()
-        def update_status_circle(row):
-            deadline_dt = row.get('deadline_dt')
-            if pd.isna(deadline_dt):
-                return '<div style="text-align: center;"><span style="display:inline-block; width:14px; height:14px; border-radius:50%; background-color:#CBD5E0;" title="Không có thời hạn"></span></div>'
-            d_date = deadline_dt.date()
-            diff_days = (d_date - today_date).days
-            if diff_days < 0:
-                color = "#E53E3E"
-                title = f"Quá hạn ({abs(diff_days)} ngày)"
-            elif diff_days == 0:
-                color = "#D69E2E"
-                title = "Đến hạn hôm nay"
-            elif diff_days == 1:
-                color = "#3182CE"
-                title = "Đến hạn ngày mai"
-            else:
-                color = "#38A169"
-                title = f"Còn hạn ({diff_days} ngày)"
-            return f'<div style="text-align: center;"><span style="display:inline-block; width:14px; height:14px; border-radius:50%; background-color:{color};" title="{title}"></span></div>'
-
-        df_filtered['Trạng thái hạn'] = df_filtered.apply(update_status_circle, axis=1)
 
 # ===================================================================
 # LOGIC RÚT GỌN CÔNG VIỆC CHUẨN
 # ===================================================================
 def get_short_method_name(method_str):
-    """Lấy ngắn gọn tên phương pháp thử nghiệm"""
     if not method_str:
         return ""
     m = str(method_str).strip().lower()
@@ -991,7 +810,6 @@ def get_short_method_name(method_str):
         return str(method_str).strip().split()[0].capitalize()
 
 def get_short_work_name(work_str, method_str=""):
-    """Bảng quy tắc rút gọn tên công việc chính xác"""
     if not work_str:
         return ""
     
@@ -999,18 +817,15 @@ def get_short_work_name(work_str, method_str=""):
     w_lower = w.lower()
     m_str = str(method_str).strip()
 
-    # 1. BỎ QUA không hiển thị
     if 'nitơ axit amin so với' in w_lower or 'nito axit amin so voi' in w_lower:
         return None
     if 'nitơ amoniac so với' in w_lower or 'nito amoniac so voi' in w_lower:
         return None
 
-    # 3. Protein -> LUÔN LUÔN ghi đuôi Testing method
     if 'protein' in w_lower or 'đạm' in w_lower:
         m_short = get_short_method_name(m_str)
         return f"Pro{m_short}"
 
-    # 4. Carbohydrat
     if 'carbohydrate không bao gồm' in w_lower or 'carbohydrat không bao gồm' in w_lower:
         return 'Carbo'
     elif 'carbohydrat' in w_lower or 'carbohydrate' in w_lower:
@@ -1019,7 +834,6 @@ def get_short_work_name(work_str, method_str=""):
         else:
             return 'Carbo'
             
-    # 5. Nhóm Chất béo, Axit béo, Omega
     if '996.06' in m_str.lower() or any(k in w_lower for k in ['chất béo', 'béo', 'axit béo', 'acid béo', 'omega', 'omg']):
         if 'bão hòa đơn' in w_lower or 'mufa' in w_lower:
             return 'MUFA'
@@ -1049,7 +863,6 @@ def get_short_work_name(work_str, method_str=""):
             cleaned = re.sub(r'^(hàm lượng|ham luong)\s*', '', w, flags=re.IGNORECASE)
             return cleaned.strip()
             
-    # 6. Đường
     if 'đường tổng số' in w_lower:
         return 'TongSK'
     elif 'đường tổng' in w_lower:
@@ -1061,7 +874,6 @@ def get_short_work_name(work_str, method_str=""):
     elif 'lactose monohydrate' in w_lower:
         return 'lacmono'
 
-    # 7. Xơ & Tinh bột
     if 'xơ tổng số (tdf)' in w_lower or 'tdf' in w_lower:
         return 'TDF'
     elif 'xơ tiêu hóa' in w_lower:
@@ -1071,7 +883,6 @@ def get_short_work_name(work_str, method_str=""):
     elif 'tinh bột' in w_lower:
         return 'tb'
 
-    # 8. Nitơ
     if 'nito amoniac' in w_lower or 'nitơ amoniac' in w_lower or 'nh3' in w_lower:
         return 'NH3'
     elif 'nitơ amin amoniac' in w_lower or 'nitơ formon' in w_lower or 'nito formon' in w_lower:
@@ -1092,7 +903,6 @@ def get_short_work_name(work_str, method_str=""):
     elif 'tro' in w_lower:
         return 'Tro'
 
-    # 10. Các hàm lượng đường có Testing method QUATEST3 1222:2024
     if 'quatest3 1222:2024' in m_str.lower() or 'aoac 2018.16' in m_str.lower():
         cleaned = re.sub(r'^(hàm lượng|ham luong)\s*', '', w, flags=re.IGNORECASE)
         return cleaned.strip().capitalize()
@@ -1101,7 +911,6 @@ def get_short_work_name(work_str, method_str=""):
     return cleaned.strip()
 
 def generate_summary_print_table(df_filtered):
-    """Trích xuất bảng dữ liệu Mã quang trắc - Công việc rút gọn chuẩn in A4 ngang"""
     if df_filtered.empty or 'Mã quang trắc' not in df_filtered.columns:
         return ""
 
@@ -1196,8 +1005,50 @@ def run_management_app():
     if "ignore_job_id" in query_params:
         job_id_to_ignore = query_params["ignore_job_id"]
         save_ignored_job(job_id_to_ignore)
-        st.query_params.clear()
+        if "ignore_job_id" in st.query_params:
+            del st.query_params["ignore_job_id"]
         st.rerun()
+
+    # ===================================================================
+    # XỬ LÝ HẸN LẠI & CẢNH BÁO ĐẾN HẠN
+    # ===================================================================
+    res_data = load_reschedule_data()
+    now_dt = datetime.now()
+
+    due_codes_list = []
+    due_jobs_list = []
+
+    for c_k, c_inf in res_data.get("codes", {}).items():
+        if not c_inf.get("ack", False):
+            res_dt = parse_reschedule_dt(c_inf["rescheduled_deadline"])
+            if res_dt and now_dt >= res_dt:
+                due_codes_list.append(c_k)
+
+    for j_k, j_inf in res_data.get("jobs", {}).items():
+        if not j_inf.get("ack", False):
+            res_dt = parse_reschedule_dt(j_inf["rescheduled_deadline"])
+            if res_dt and now_dt >= res_dt:
+                due_jobs_list.append(j_k)
+
+    if due_codes_list or due_jobs_list:
+        with st.container():
+            st.info("🔔 **Có các lịch hẹn lại đã đến hạn cần xác nhận đã xem:**")
+            ack_cols = st.columns(3)
+            col_idx = 0
+            for dc in due_codes_list:
+                with ack_cols[col_idx % 3]:
+                    if st.button(f"✔ Đã xem Mã: {dc}", key=f"btn_ack_code_{dc}", type="primary"):
+                        ack_reschedule("code", dc)
+                        st.rerun()
+                col_idx += 1
+            for dj in due_jobs_list:
+                disp_j = dj.replace("__", " - ")
+                with ack_cols[col_idx % 3]:
+                    if st.button(f"✔ Đã xem Chỉ tiêu: {disp_j}", key=f"btn_ack_job_{dj}", type="primary"):
+                        ack_reschedule("job", dj)
+                        st.rerun()
+                col_idx += 1
+        st.markdown("---")
 
     st.markdown("""
     <div style="display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; font-size: 14px; margin-bottom: 20px; background-color: #f8f9fa; padding: 12px 16px; border-radius: 6px; border: 1px solid #e9ecef;">
@@ -1241,6 +1092,126 @@ def run_management_app():
             df_filtered = df_filtered[
                 ~df_filtered['Công việc'].astype(str).str.strip().str.lower().str.startswith('năng lượng')
             ].copy()
+
+        # ===================================================================
+        # KHUNG THAO TÁC HẸN LẠI THỜI HẠN (ĐÃ ĐƯA VÀO ĐÚNG HÀM)
+        # ===================================================================
+        with st.expander("📅 **Chức năng Hẹn Lại Thời Hạn (Lưu nội bộ)**", expanded=False):
+            res_mode = st.radio("Chọn phạm vi hẹn lại:", ["Hẹn mã quang trắc", "Hẹn chỉ tiêu"], horizontal=True)
+            
+            all_available_codes = sorted([c for c in df_filtered['Mã quang trắc'].unique() if c])
+            
+            if res_mode == "Hẹn mã quang trắc":
+                selected_res_codes = st.multiselect("Chọn các Mã quang trắc cần hẹn lại:", options=all_available_codes)
+                
+                default_date = date.today()
+                default_time = time(17, 0)
+                if selected_res_codes:
+                    matched_rows = df_filtered[df_filtered['Mã quang trắc'].isin(selected_res_codes)]
+                    if not matched_rows.empty and 'Thời hạn' in matched_rows.columns:
+                        raw_dl = str(matched_rows['Thời hạn'].iloc[0]).strip()
+                        parsed_dt = parse_reschedule_dt(raw_dl)
+                        if parsed_dt:
+                            default_date = parsed_dt.date()
+                            default_time = parsed_dt.time()
+
+                col_d, col_t = st.columns([2, 1])
+                with col_d:
+                    new_res_date = st.date_input("Chọn Ngày mới:", value=default_date, format="DD/MM/YYYY")
+                with col_t:
+                    new_res_time = st.time_input("Chọn Giờ mới:", value=default_time)
+                
+                if st.button("Áp dụng Hẹn Mã Quang Trắc", type="primary"):
+                    if selected_res_codes and new_res_date and new_res_time:
+                        new_dt_str = f"{new_res_date.strftime('%Y-%m-%d')} {new_res_time.strftime('%H:%M:%S')}"
+                        for sc in selected_res_codes:
+                            orig_d = df_filtered[df_filtered['Mã quang trắc'] == sc]['Thời hạn'].iloc[0] if 'Thời hạn' in df_filtered.columns else ''
+                            add_reschedule_code(sc, new_dt_str, orig_d)
+                        st.success("Đã áp dụng hẹn lại thời hạn thành công!")
+                        st.rerun()
+                    else:
+                        st.warning("Vui lòng chọn ít nhất một Mã quang trắc.")
+            else:
+                job_options = []
+                for idx, r in df_filtered.iterrows():
+                    code_val = str(r.get('Mã quang trắc', '')).strip()
+                    work_val = str(r.get('Công việc', '')).strip()
+                    if code_val and work_val:
+                        job_options.append(f"{code_val} - {work_val}")
+                job_options = sorted(list(set(job_options)))
+                
+                selected_res_jobs = st.multiselect("Chọn các Công việc (Chỉ tiêu) cần hẹn lại:", options=job_options)
+                
+                default_date = date.today()
+                default_time = time(17, 0)
+                if selected_res_jobs:
+                    parts = selected_res_jobs[0].split(" - ", 1)
+                    if len(parts) == 2:
+                        c_part, w_part = parts[0].strip(), parts[1].strip()
+                        matched_rows = df_filtered[(df_filtered['Mã quang trắc'] == c_part) & (df_filtered['Công việc'] == w_part)]
+                        if not matched_rows.empty and 'Thời hạn' in matched_rows.columns:
+                            raw_dl = str(matched_rows['Thời hạn'].iloc[0]).strip()
+                            parsed_dt = parse_reschedule_dt(raw_dl)
+                            if parsed_dt:
+                                default_date = parsed_dt.date()
+                                default_time = parsed_dt.time()
+
+                col_d, col_t = st.columns([2, 1])
+                with col_d:
+                    new_res_date = st.date_input("Chọn Ngày mới:", value=default_date, format="DD/MM/YYYY")
+                with col_t:
+                    new_res_time = st.time_input("Chọn Giờ mới:", value=default_time)
+                
+                if st.button("Áp dụng Hẹn Chỉ Tiêu", type="primary"):
+                    if selected_res_jobs and new_res_date and new_res_time:
+                        new_dt_str = f"{new_res_date.strftime('%Y-%m-%d')} {new_res_time.strftime('%H:%M:%S')}"
+                        for sj in selected_res_jobs:
+                            parts = sj.split(" - ", 1)
+                            if len(parts) == 2:
+                                c_part, w_part = parts[0].strip(), parts[1].strip()
+                                job_key = f"{c_part}__{w_part}"
+                                orig_d = df_filtered[(df_filtered['Mã quang trắc'] == c_part) & (df_filtered['Công việc'] == w_part)]['Thời hạn'].iloc[0] if 'Thời hạn' in df_filtered.columns else ''
+                                add_reschedule_job(job_key, new_dt_str, orig_d)
+                        st.success("Đã áp dụng hẹn lại chỉ tiêu thành công!")
+                        st.rerun()
+                    else:
+                        st.warning("Vui lòng chọn ít nhất một Công việc.")
+
+        # Áp dụng thời hạn nội bộ vào dữ liệu hiển thị bảng
+        df_filtered['_code_reschedule'] = None
+        df_filtered['_job_reschedule'] = None
+        df_filtered['_is_reschedule_due'] = False
+
+        for idx, row in df_filtered.iterrows():
+            r_code = str(row.get('Mã quang trắc', '')).strip()
+            r_work = str(row.get('Công việc', '')).strip()
+            j_key = f"{r_code}__{r_work}"
+
+            if r_code in res_data.get("codes", {}):
+                c_info = res_data["codes"][r_code]
+                res_dt = parse_reschedule_dt(c_info["rescheduled_deadline"])
+                if res_dt:
+                    is_due = (now_dt >= res_dt) and (not c_info.get("ack", False))
+                    if is_due:
+                        df_filtered.at[idx, '_is_reschedule_due'] = True
+                    if not c_info.get("ack", False):
+                        df_filtered.at[idx, 'deadline_dt'] = pd.to_datetime(res_dt)
+
+            if j_key in res_data.get("jobs", {}):
+                j_info = res_data["jobs"][j_key]
+                res_dt = parse_reschedule_dt(j_info["rescheduled_deadline"])
+                if res_dt:
+                    is_due = (now_dt >= res_dt) and (not j_info.get("ack", False))
+                    if is_due:
+                        df_filtered.at[idx, '_is_reschedule_due'] = True
+                    if not j_info.get("ack", False):
+                        df_filtered.at[idx, 'deadline_dt'] = pd.to_datetime(res_dt)
+
+        df_filtered = df_filtered.sort_values(
+            by=['_is_reschedule_due', 'deadline_dt', 'id'], 
+            ascending=[False, True, True], 
+            na_position='last'
+        ).reset_index(drop=True)
 
         with st.container():
             col1, col2, col3, col4, col5, col6 = st.columns(6)
